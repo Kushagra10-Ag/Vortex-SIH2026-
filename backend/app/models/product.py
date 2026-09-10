@@ -1,6 +1,7 @@
 from app.db import db
 from datetime import datetime
 
+
 class Product(db.Model):
     __tablename__ = "products"
 
@@ -19,15 +20,39 @@ class Product(db.Model):
     quantity = db.Column(db.Integer, nullable=False)
     min_stock_level = db.Column(db.Integer, default=5)
 
-    # Expiry & batch
+    # Shelf Mapping
+    shelf_code = db.Column(
+        db.String(20),
+        nullable=True,
+        index=True
+    )
+
+    # Expiry & Batch
     expiry_date = db.Column(db.Date)
-    batch_number = db.Column(db.String(100))  # 🔥 new (real-world)
+    batch_number = db.Column(db.String(100))
 
     # Status
     is_active = db.Column(db.Boolean, default=True)
 
     # Metadata
-    created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    updated_at = db.Column(db.DateTime, onupdate=datetime.utcnow)
+    created_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow
+    )
 
-    bill_items = db.relationship("BillItem", back_populates="product")
+    updated_at = db.Column(
+        db.DateTime,
+        default=datetime.utcnow,
+        onupdate=datetime.utcnow
+    )
+
+    # Relationships
+    bill_items = db.relationship(
+        "BillItem",
+        back_populates="product"
+    )
+
+    shelf_statuses = db.relationship(
+        "ShelfStatus",
+        back_populates="product"
+    )
