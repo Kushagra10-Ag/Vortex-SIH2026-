@@ -1,0 +1,5 @@
+2026-09-11 11:18:17 - [edge_ai] - [WARNING] - [Reconnect] Attempt #1 (failures=0, stale=False)
+2026-09-11 11:18:17 - [edge_ai] - [WARNING] - [Reconnect] Attempt #2 (failures=0, stale=False)
+2026-09-11 11:18:17 - [edge_ai] - [WARNING] - [Reconnect] Attempt #3 (failures=0, stale=False)
+2026-09-11 11:18:17 - [edge_ai] - [DEBUG] - [Reconnect] Capture opened — failure counters reset
+2026-09-11 11:18:17 - [edge_ai] - [WARNING] - [FrameProcessor] Empty frame — skip
