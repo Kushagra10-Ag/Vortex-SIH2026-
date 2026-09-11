@@ -3,7 +3,8 @@ Model Loader — Load YOLOv11 Weights via Ultralytics API
 Loads the YOLO model from the weights/ directory and prepares it for inference.
 
 Supports:
-  - YOLOv11 (weights/yolov11.pt) — primary model
+  - Local file at EdgeAIConfig.YOLO_WEIGHTS_PATH (default weights/yolov11.pt)
+  - First-run download of EdgeAIConfig.YOLO_MODEL_NAME (default yolo11n.pt)
   - CPU or CUDA GPU inference via config.ENABLE_GPU
   - Graceful failure with clear error messages
 
@@ -13,21 +14,45 @@ Usage:
 """
 
 import os
+import shutil
 from typing import Optional
 
 from ..utils.logger import log_info, log_warning, log_error
 from ..config import EdgeAIConfig
 
 
-# Default weights path relative to edge-ai root
-_DEFAULT_WEIGHTS = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "weights", "yolov11.pt"
-)
+_EDGE_AI_ROOT = os.path.dirname(os.path.dirname(__file__))
+
+# Default cache path relative to edge-ai root (plan.md: weights/yolov11.pt)
+_DEFAULT_WEIGHTS = os.path.join(_EDGE_AI_ROOT, "weights", "yolov11.pt")
 
 # COCO names file
-_DEFAULT_NAMES = os.path.join(
-    os.path.dirname(os.path.dirname(__file__)), "weights", "coco.names"
-)
+_DEFAULT_NAMES = os.path.join(_EDGE_AI_ROOT, "weights", "coco.names")
+
+
+def _resolve_weights_path(weights_path: Optional[str] = None) -> str:
+    """Resolve YOLO_WEIGHTS_PATH against the edge-ai directory when relative."""
+    raw = weights_path if weights_path is not None else EdgeAIConfig.YOLO_WEIGHTS_PATH
+    if not raw:
+        return _DEFAULT_WEIGHTS
+    if os.path.isabs(raw):
+        return raw
+    return os.path.normpath(os.path.join(_EDGE_AI_ROOT, raw))
+
+
+def _normalize_model_name(name: str) -> str:
+    """Ensure an Ultralytics checkpoint name ends with .pt."""
+    text = (name or "").strip()
+    if not text:
+        return "yolo11n.pt"
+    if text.lower().endswith(".pt"):
+        return text
+    return f"{text}.pt"
+
+
+def _is_usable_weights_file(path: str) -> bool:
+    """True when path is a non-empty file (0-byte placeholders are not usable)."""
+    return os.path.isfile(path) and os.path.getsize(path) > 0
 
 
 class ModelLoader:
@@ -35,7 +60,8 @@ class ModelLoader:
     Loads and configures a YOLO model for edge inference.
 
     Args:
-        weights_path:  Path to .pt weights file. Defaults to weights/yolov11.pt.
+        weights_path:  Path to .pt weights file. Defaults to YOLO_WEIGHTS_PATH.
+        model_name:    Ultralytics pretrained name if local weights are missing.
         use_gpu:       Use CUDA GPU if True (requires CUDA build of PyTorch).
         confidence:    Default confidence threshold for predictions.
         iou:           Default IoU threshold for NMS.
@@ -43,12 +69,16 @@ class ModelLoader:
 
     def __init__(
         self,
-        weights_path: str = _DEFAULT_WEIGHTS,
+        weights_path: Optional[str] = None,
+        model_name: Optional[str] = None,
         use_gpu: bool = EdgeAIConfig.ENABLE_GPU,
         confidence: float = EdgeAIConfig.MODEL_CONFIDENCE_THRESHOLD,
         iou: float = EdgeAIConfig.MODEL_IOU_THRESHOLD,
     ):
-        self.weights_path = weights_path
+        self.weights_path = _resolve_weights_path(weights_path)
+        self.model_name = _normalize_model_name(
+            model_name if model_name is not None else EdgeAIConfig.YOLO_MODEL_NAME
+        )
         self.use_gpu = use_gpu
         self.confidence = confidence
         self.iou = iou
@@ -56,6 +86,7 @@ class ModelLoader:
         self._model = None
         self._class_names: list = []
         self._device: str = "cpu"
+        self._loaded_from: str = ""
 
     # ─────────────────────────────────────────────────────────────────────────
     # PUBLIC API
@@ -63,22 +94,23 @@ class ModelLoader:
 
     def load(self):
         """
-        Load YOLO model from weights file.
+        Load YOLO model from local weights, or download YOLO_MODEL_NAME on first run.
 
         Returns:
             ultralytics.YOLO: Loaded model ready for .predict() calls.
 
         Raises:
-            RuntimeError: If model file not found or ultralytics not installed.
+            RuntimeError: If ultralytics is missing or the model cannot be loaded.
         """
         if self._model is not None:
             log_warning("[ModelLoader] Model already loaded — returning cached instance")
             return self._model
 
-        self._validate_weights_file()
+        source = self._resolve_load_source()
         self._determine_device()
         self._load_class_names()
-        self._load_model()
+        self._load_model(source)
+        self._cache_weights_locally(source)
 
         return self._model
 
@@ -105,17 +137,26 @@ class ModelLoader:
     # INTERNAL
     # ─────────────────────────────────────────────────────────────────────────
 
-    def _validate_weights_file(self):
-        """Check that weights file exists and is readable."""
-        if not os.path.isfile(self.weights_path):
-            raise RuntimeError(
-                f"[ModelLoader] Weights file not found: {self.weights_path}\n"
-                f"Expected: weights/yolov11.pt in edge-ai directory"
+    def _resolve_load_source(self) -> str:
+        """Prefer a real local .pt; otherwise use the pretrained Ultralytics name."""
+        if _is_usable_weights_file(self.weights_path):
+            size_mb = os.path.getsize(self.weights_path) / (1024 * 1024)
+            log_info(
+                f"[ModelLoader] Found weights: {self.weights_path} ({size_mb:.1f} MB)"
             )
-        size_mb = os.path.getsize(self.weights_path) / (1024 * 1024)
-        log_info(
-            f"[ModelLoader] Found weights: {self.weights_path} ({size_mb:.1f} MB)"
-        )
+            return self.weights_path
+
+        if os.path.isfile(self.weights_path) and os.path.getsize(self.weights_path) == 0:
+            log_warning(
+                f"[ModelLoader] {self.weights_path} is empty — "
+                f"downloading {self.model_name} on first run"
+            )
+        else:
+            log_warning(
+                f"[ModelLoader] Weights not found at {self.weights_path} — "
+                f"downloading {self.model_name} on first run"
+            )
+        return self.model_name
 
     def _determine_device(self):
         """Determine compute device (CUDA vs CPU)."""
@@ -142,7 +183,7 @@ class ModelLoader:
 
     def _load_class_names(self):
         """Load COCO class names from coco.names file."""
-        if os.path.isfile(_DEFAULT_NAMES):
+        if os.path.isfile(_DEFAULT_NAMES) and os.path.getsize(_DEFAULT_NAMES) > 0:
             try:
                 with open(_DEFAULT_NAMES, "r") as f:
                     self._class_names = [line.strip() for line in f if line.strip()]
@@ -157,8 +198,8 @@ class ModelLoader:
             log_warning(f"[ModelLoader] coco.names not found at {_DEFAULT_NAMES}")
             self._class_names = []
 
-    def _load_model(self):
-        """Import ultralytics and load YOLO model."""
+    def _load_model(self, source: str):
+        """Import ultralytics and load YOLO from a local path or pretrained name."""
         try:
             from ultralytics import YOLO
         except ImportError:
@@ -167,17 +208,17 @@ class ModelLoader:
                 "Install with: pip install ultralytics"
             )
 
-        log_info(f"[ModelLoader] Loading YOLO model from {self.weights_path} ...")
+        log_info(f"[ModelLoader] Loading YOLO model from {source} ...")
         try:
-            self._model = YOLO(self.weights_path)
+            self._model = YOLO(source)
+            self._loaded_from = source
 
-            # Move to correct device
             if self._device != "cpu":
                 self._model.to(self._device)
 
-            # Set default inference parameters
             log_info(
                 f"[ModelLoader] Model loaded ✓ — "
+                f"source={source}, "
                 f"device={self._device}, "
                 f"conf={self.confidence}, "
                 f"iou={self.iou}"
@@ -187,3 +228,33 @@ class ModelLoader:
             log_error(f"[ModelLoader] Failed to load model: {e}")
             raise RuntimeError(f"[ModelLoader] Model load failed: {e}")
 
+    def _cache_weights_locally(self, source: str):
+        """Copy a downloaded checkpoint into weights/yolov11.pt for the next start."""
+        if _is_usable_weights_file(self.weights_path):
+            return
+        if self._model is None:
+            return
+
+        candidates = []
+        ckpt = getattr(self._model, "ckpt_path", None)
+        if ckpt:
+            candidates.append(str(ckpt))
+        if source and os.path.isfile(source):
+            candidates.append(source)
+        candidates.append(os.path.join(os.getcwd(), os.path.basename(self.model_name)))
+
+        src = next((p for p in candidates if _is_usable_weights_file(p)), None)
+        if src is None:
+            log_warning(
+                "[ModelLoader] Download succeeded but could not find a file to cache "
+                f"at {self.weights_path}"
+            )
+            return
+
+        try:
+            os.makedirs(os.path.dirname(self.weights_path), exist_ok=True)
+            if os.path.abspath(src) != os.path.abspath(self.weights_path):
+                shutil.copy2(src, self.weights_path)
+            log_info(f"[ModelLoader] Cached weights to {self.weights_path}")
+        except Exception as e:
+            log_warning(f"[ModelLoader] Could not cache weights locally: {e}")
