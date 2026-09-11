@@ -4,7 +4,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 from app.db import db
 from sqlalchemy import text
-model = joblib.load("C:\\users\\vidui\\Vortex-SIH2026-\\backend\\ai_models\\sales_model.pkl")
+model = joblib.load("C:\\SIH2026\\backend\\ai_models\\sales_model.pkl")
 
 def get_sales_forecast():
     # 🔥 fetch real data
