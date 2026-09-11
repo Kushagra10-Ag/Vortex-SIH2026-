@@ -53,7 +53,7 @@ function Sidebar() {
   const navItems = [
     { key: 'dashboard', label: 'Dashboard', icon: 'grid', route: '/' },
     { key: 'live-monitoring', label: 'Live Monitoring', icon: 'video', route: '/live_monitor' },
-    { key: 'sales', label: 'Sales', icon: 'cart', route: '/sales' },
+    { key: 'billing', label: 'Billing', icon: 'cart', route: '/billing' },
     { key: 'inventory', label: 'Inventory', icon: 'box', route: '/inventory' },
     { key: 'customers', label: 'Customers', icon: 'users', route: '/customers' },
     { key: 'employees', label: 'Employees', icon: 'briefcase', route: '/employees' },
