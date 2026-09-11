@@ -9,7 +9,16 @@ from datetime import datetime
 from logging.handlers import RotatingFileHandler
 import sys
 
-from .constants import LogConfig
+# Import LogConfig to avoid circular dependency
+try:
+    from .constants import LogConfig
+except ImportError:
+    # Fallback if constants import fails
+    class LogConfig:
+        LOG_LEVEL = "INFO"
+        LOG_FILE = "logs/edge_ai.log"
+        LOG_FORMAT = "%(asctime)s - [%(name)s] - [%(levelname)s] - %(message)s"
+        LOG_RETENTION_DAYS = 7
 
 
 class EdgeAILogger:
