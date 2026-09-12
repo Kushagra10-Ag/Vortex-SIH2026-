@@ -9,6 +9,8 @@ from app.models import (
     ShelfStatus,
     Footfall,
 )
+from app.services.device_service import update_offline_devices
+from flask import current_app
 
 
 def _serialize(obj):
@@ -26,6 +28,8 @@ def _serialize(obj):
 # ==========================================================
 
 def get_dashboard_overview():
+
+    update_offline_devices(current_app.config.get("DEVICE_OFFLINE_TIMEOUT_MINUTES", 5))
 
     total_products = Product.query.count()
 

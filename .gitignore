@@ -4,3 +4,4 @@ __pycache__/
 .env__pycache__/
 *.py[cod]
 backend/.env
+edge-ai/.env

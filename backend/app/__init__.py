@@ -26,9 +26,11 @@ jwt = JWTManager()
 def create_app():
     app = Flask(__name__)
     app.config.from_object(Config)
+    app.config["MAX_CONTENT_LENGTH"] = Config.MAX_CONTENT_LENGTH
 
-    # Enable CORS
-    CORS(app)
+    # Enable CORS only for explicitly configured frontend origins.
+    if app.config.get("FRONTEND_ORIGINS"):
+        CORS(app, origins=app.config["FRONTEND_ORIGINS"])
 
     # Initialize extensions
     db.init_app(app)

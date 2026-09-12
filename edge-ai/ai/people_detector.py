@@ -15,10 +15,10 @@ import numpy as np
 
 from .inference import InferenceEngine, filter_persons
 from .tracker import CentroidTracker
-from ..events.event_builder import EventBuilder
-from ..events.event_types import CameraEvent
-from ..utils.constants import ModelConfig
-from ..utils.logger import log_debug, log_info
+from events.event_builder import EventBuilder
+from events.event_types import CameraEvent
+from utils.constants import ModelConfig
+from utils.logger import log_debug, log_info
 
 
 class PeopleDetector:
@@ -69,7 +69,7 @@ class PeopleDetector:
     # ─────────────────────────────────────────────────────────────────────────
 
     def process(
-        self, frame: np.ndarray
+        self, frame: np.ndarray, detections=None
     ) -> Tuple[List[CameraEvent], int]:
         """
         Process a single frame: detect, track, and generate events.
@@ -84,8 +84,8 @@ class PeopleDetector:
         """
         events: List[CameraEvent] = []
 
-        # 1. Run YOLO inference (with frame-skip)
-        all_detections = self._engine.run(frame)
+        # 1. Reuse shared frame inference when supplied by the daemon.
+        all_detections = detections if detections is not None else self._engine.run(frame)
 
         # 2. Filter to persons only
         persons = filter_persons(all_detections)

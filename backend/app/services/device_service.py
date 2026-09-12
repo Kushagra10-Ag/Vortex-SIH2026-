@@ -2,6 +2,7 @@ from datetime import datetime, timedelta
 
 from app.db import db
 from app.models import Device
+from flask import current_app
 
 
 def register_device(data):
@@ -31,11 +32,18 @@ def register_device(data):
     return device.to_dict()
 
 
-def get_all_devices():
+def get_all_devices(status=None, device_type=None):
 
-    devices = Device.query.order_by(
+    update_offline_devices(current_app.config.get("DEVICE_OFFLINE_TIMEOUT_MINUTES", 5))
+
+    query = Device.query.order_by(
         Device.created_at.desc()
-    ).all()
+    )
+    if status:
+        query = query.filter_by(status=status)
+    if device_type:
+        query = query.filter_by(device_type=device_type)
+    devices = query.all()
 
     return [
         device.to_dict()
@@ -212,3 +220,17 @@ def get_device_summary():
         "ir_sensor_count": ir,
         "ultrasonic_sensor_count": ultrasonic
     }
+
+
+def get_device_by_id(device_id):
+    device = Device.query.get(device_id)
+    if not device:
+        raise ValueError("Device not found.")
+    return device.to_dict()
+
+
+def record_heartbeat(data):
+    device_id = data.get("device_id")
+    if not device_id:
+        raise ValueError("device_id is required.")
+    return heartbeat(device_id)

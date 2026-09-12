@@ -46,10 +46,10 @@ from typing import List, Dict, Tuple, Optional
 
 import numpy as np
 
-from ..events.event_types import Detection
-from ..utils.helpers import distance_euclidean
-from ..utils.logger import log_debug
-from ..utils.constants import ModelConfig
+from events.event_types import Detection
+from utils.helpers import distance_euclidean
+from utils.logger import log_debug
+from utils.constants import ModelConfig
 
 
 class TrackState:

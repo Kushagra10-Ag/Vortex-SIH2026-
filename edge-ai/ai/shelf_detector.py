@@ -13,10 +13,10 @@ import time
 import numpy as np
 
 from .inference import InferenceEngine
-from ..events.event_builder import EventBuilder
-from ..events.event_types import CameraEvent
-from ..utils.constants import ModelConfig, ShelfStockStatus
-from ..utils.logger import log_debug, log_info, log_warning
+from events.event_builder import EventBuilder
+from events.event_types import CameraEvent
+from utils.constants import ModelConfig, ShelfStockStatus
+from utils.logger import log_debug, log_info, log_warning
 
 
 class ShelfConfig:
@@ -104,7 +104,7 @@ class ShelfDetector:
     # PUBLIC API
     # ─────────────────────────────────────────────────────────────────────────
 
-    def process(self, frame: np.ndarray) -> Tuple[List[CameraEvent], Dict[str, dict]]:
+    def process(self, frame: np.ndarray, detections=None) -> Tuple[List[CameraEvent], Dict[str, dict]]:
         """
         Process a single frame: detect products in shelf ROIs and generate events.
 
@@ -119,8 +119,8 @@ class ShelfDetector:
         events: List[CameraEvent] = []
         shelf_states = {}
 
-        # Run inference once for the frame
-        all_detections = self._engine.run(frame)
+        # Reuse shared frame inference when supplied by the daemon.
+        all_detections = detections if detections is not None else self._engine.run(frame)
 
         # Process each shelf configuration
         for shelf_config in self._shelf_configs:
@@ -290,14 +290,14 @@ class ShelfDetector:
 # PRESET SHELF CONFIGURATIONS
 # ─────────────────────────────────────────────────────────────────────────
 
-def create_default_shelf_configs() -> List[ShelfConfig]:
+def create_default_shelf_configs(roi_overrides: Optional[Dict[str, List[int]]] = None) -> List[ShelfConfig]:
     """
     Create a set of default shelf configurations for common retail scenarios.
 
     Returns:
         List of ShelfConfig objects for typical kirana store layout
     """
-    return [
+    configs = [
         # Shelf A1 - Beverages (left side of frame)
         ShelfConfig(
             shelf_id="A1",
@@ -335,3 +335,7 @@ def create_default_shelf_configs() -> List[ShelfConfig]:
             empty_threshold=10.0,
         ),
     ]
+    for shelf_config in configs:
+        if roi_overrides and shelf_config.shelf_id in roi_overrides:
+            shelf_config.roi = roi_overrides[shelf_config.shelf_id]
+    return configs

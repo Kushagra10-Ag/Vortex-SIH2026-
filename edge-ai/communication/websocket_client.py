@@ -34,8 +34,8 @@ import threading
 import time
 from typing import Optional, Callable, Any
 
-from ..utils.logger import log_info, log_warning, log_error, log_debug
-from ..config import EdgeAIConfig
+from utils.logger import log_info, log_warning, log_error, log_debug
+from config import EdgeAIConfig
 
 # Graceful import — websockets is optional
 try:

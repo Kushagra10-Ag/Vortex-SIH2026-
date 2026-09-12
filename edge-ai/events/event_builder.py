@@ -17,9 +17,9 @@ from .event_types import (
     HeartbeatEvent,
     Detection,
 )
-from ..utils.constants import CameraEventType, SensorType
-from ..utils.helpers import generate_event_id, get_utc_timestamp
-from ..utils.image_utils import frame_to_base64
+from utils.constants import CameraEventType, SensorType
+from utils.helpers import generate_event_id, get_utc_timestamp
+from utils.image_utils import frame_to_base64
 
 try:
     import numpy as np

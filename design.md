@@ -217,7 +217,7 @@ export interface CameraVisionEvent {
 export const fetchDashboardOverview = async (): Promise<DashboardOverview | null> => {
   const res = await fetch(`${BASE_URL}/dashboard/overview`);
   const data = await res.json();
-  return data.success ? data.dashboard : null;
+  return data.success ? data.data : null;
 };
 
 export const fetchSmartShelves = async (): Promise<SmartShelf[]> => {

@@ -1,7 +1,11 @@
 from app.services import sensor_service
+from app.utils.validators import validate_sensor_reading
 
 def record_reading(data):
-    return sensor_service.record_reading(data)
+    valid, error = validate_sensor_reading(data)
+    if not valid:
+        return {"success": False, "error": error}, 400
+    return sensor_service.record_reading(data), 201
 
 
 def get_latest_readings(sensor_type=None, limit=50):

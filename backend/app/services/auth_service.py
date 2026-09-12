@@ -68,7 +68,9 @@ def authenticate_user(data):
 
 
 def create_jwt_token(user, expires_in_days=7):
-    secret_key = current_app.config.get("JWT_SECRET_KEY") or current_app.config.get("SECRET_KEY", "super-secret-key")
+    secret_key = current_app.config.get("JWT_SECRET_KEY") or current_app.config.get("SECRET_KEY")
+    if not secret_key:
+        raise RuntimeError("JWT secret is not configured")
     payload = {
         "sub": user.id,
         "user_id": user.id,

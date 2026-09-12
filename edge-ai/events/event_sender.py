@@ -15,8 +15,8 @@ from collections import deque
 from typing import Union, Optional
 
 from .event_types import CameraEvent, FootfallEvent
-from ..utils.logger import log_info, log_warning, log_error, log_debug
-from ..config import EdgeAIConfig
+from utils.logger import log_info, log_warning, log_error, log_debug
+from config import EdgeAIConfig
 
 
 # Maximum number of events to buffer before dropping oldest (prevent memory leak)

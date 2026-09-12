@@ -2,9 +2,21 @@ import joblib
 import numpy as np
 import pandas as pd
 from datetime import datetime, timedelta
+from pathlib import Path
 from app.db import db
 from sqlalchemy import text
-model = joblib.load("C:\\SIH2026\\backend\\ai_models\\sales_model.pkl")
+
+MODEL_PATH = Path(__file__).resolve().parents[2] / "ai_models" / "sales_model.pkl"
+model = None
+
+
+def _get_model():
+    global model
+    if model is None:
+        if not MODEL_PATH.is_file():
+            raise RuntimeError(f"Sales forecast model not found: {MODEL_PATH}")
+        model = joblib.load(MODEL_PATH)
+    return model
 
 def get_sales_forecast():
     # 🔥 fetch real data
@@ -44,7 +56,7 @@ def get_sales_forecast():
     )
 
     # predict
-    predictions = model.predict(future_df)
+    predictions = _get_model().predict(future_df)
 
     return [
     {

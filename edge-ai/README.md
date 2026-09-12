@@ -155,6 +155,8 @@ Replace `192.168.1.XX` with your phone's actual IP address.
 python app.py
 ```
 
+The command must be run from `edge-ai/` after installing `requirements.txt`. It validates configuration first and exits with a clear error if OpenCV, the YOLO runtime, the backend, or the configured camera is unavailable.
+
 The daemon will:
 1. Validate configuration
 2. Register device with backend

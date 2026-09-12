@@ -64,11 +64,10 @@ class TestCameraEvent:
 
         payload = event.to_backend_payload()
 
-        # Should map to backend expected fields
-        assert "camera_id" in payload  # device_id → camera_id
-        assert payload["camera_id"] == "edge-001"
-        assert "bbox_coordinates" in payload  # bounding_box → bbox_coordinates
-        assert payload["bbox_coordinates"] == [100, 100, 50, 100]
+        # Should use the canonical backend event fields.
+        assert payload["device_id"] == "edge-001"
+        assert payload["details"]["bounding_box"] == [100, 100, 50, 100]
+        assert payload["details"]["person_count"] == 2
         assert "details" in payload  # metadata → details
         assert "event_type" in payload
         assert "confidence" in payload
@@ -85,9 +84,8 @@ class TestCameraEvent:
 
         payload = event.to_backend_payload()
 
-        # Snapshot should be included as snapshot_url
-        assert "snapshot_url" in payload
-        assert payload["snapshot_url"].startswith("data:image/jpeg;base64,")
+        # Snapshot should be included in the backend details object.
+        assert payload["details"]["frame_snapshot"] == "fake_base64_string"
 
 
 class TestSensorEvent:
@@ -303,11 +301,10 @@ class TestEventPayloadBackendCompatibility:
 
         payload = event.to_backend_payload()
 
-        # Backend expects: camera_id, event_type, confidence, bbox_coordinates, details
-        assert "camera_id" in payload
+        # Backend expects: device_id, event_type, confidence, details
+        assert "device_id" in payload
         assert "event_type" in payload
         assert "confidence" in payload
-        assert "bbox_coordinates" in payload
         assert "details" in payload
 
     def test_sensor_event_vs_backend_fields(self):

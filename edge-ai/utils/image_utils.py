@@ -3,7 +3,10 @@ Image Processing Utilities for Edge-AI Module
 Frame resizing, color conversion, bounding box drawing, image encoding
 """
 
-import cv2
+try:
+    import cv2
+except ImportError:  # Image utilities remain importable for non-vision tests.
+    cv2 = None
 import numpy as np
 from typing import Tuple, List, Optional
 import base64

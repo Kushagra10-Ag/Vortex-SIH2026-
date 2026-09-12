@@ -58,3 +58,16 @@ class Alert(db.Model):
         "Device",
         back_populates="alerts"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "title": self.title,
+            "message": self.message,
+            "severity": self.severity,
+            "category": self.category,
+            "device_id": self.device.device_id if self.device else self.device_id,
+            "is_read": self.is_read,
+            "is_resolved": self.is_resolved,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

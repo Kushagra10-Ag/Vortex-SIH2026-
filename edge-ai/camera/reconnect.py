@@ -11,8 +11,8 @@ dropped Wi-Fi/RTSP stream can recover without restarting the process.
 
 import time
 
-from ..config import EdgeAIConfig
-from ..utils.logger import log_debug, log_warning
+from config import EdgeAIConfig
+from utils.logger import log_debug, log_warning
 
 
 # Consecutive failed reads before forcing a reconnect (even if capture still "open")
