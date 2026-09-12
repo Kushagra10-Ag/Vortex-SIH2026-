@@ -175,7 +175,7 @@ function TopBar() {
           <Text style={styles.logoText}>F</Text>
         </View>
 
-        <Text style={styles.appTitle}>Retail Command Center</Text>
+        <Text style={styles.appTitle}>BizMate</Text>
       </View>
 
       <View style={styles.topBarRight}>
