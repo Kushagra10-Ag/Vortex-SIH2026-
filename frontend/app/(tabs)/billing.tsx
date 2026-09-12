@@ -29,8 +29,17 @@ function Icon({ name, color, size = 16 }: { name: string; color: string; size?: 
     money: (<><Circle cx={12} cy={12} r={9} {...p} /><Path d="M14.5 9a3 3 0 0 0-2.5-1.2c-1.5 0-2.7.8-2.7 1.9s1.2 1.9 2.7 1.9 2.7.8 2.7 1.9-1.2 1.9-2.7 1.9A3 3 0 0 1 9.5 15" {...p} /></>),
     users: (<><Circle cx={9} cy={8} r={3} {...p} /><Path d="M3.5 20a5.5 5.5 0 0 1 11 0" {...p} /><Path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 15.5a5.5 5.5 0 0 1 3 4.5" {...p} /></>),
     clock: (<><Circle cx={12} cy={12} r={9} {...p} /><Path d="M12 7v5l3 2" {...p} /></>),
+    bot: (
+  <>
+    <Rect x={4} y={7} width={16} height={12} rx={3} {...p} />
+    <Circle cx={9} cy={13} r={1.2} fill={color} />
+    <Circle cx={15} cy={13} r={1.2} fill={color} />
+    <Path d="M12 3v4M9 3h6" {...p} />
+  </>
+),
     edit: (<><Path d="M4 20h4l10-10-4-4L4 16v4Z" {...p} /></>),
     file: (<><Path d="M6 2h8l4 4v16H6V2Z" {...p} /><Path d="M14 2v4h4" {...p} /></>),
+    
     bell: (<><Path d="M6 9a6 6 0 0 1 12 0c0 5 2 6 2 6H4s2-1 2-6Z" {...p} /><Path d="M10 20a2 2 0 0 0 4 0" {...p} /></>),
     close: (<><Path d="M6 6l12 12M18 6L6 18" {...p} /></>),
   };
@@ -50,6 +59,14 @@ function SidebarIcon({ name, color, size = 16 }: { name: string; color: string; 
     users: (<><Circle cx={9} cy={8} r={3} {...p} /><Path d="M3.5 20a5.5 5.5 0 0 1 11 0" {...p} /><Path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 15.5a5.5 5.5 0 0 1 3 4.5" {...p} /></>),
     briefcase: (<><Path d="M3 8h18v11H3zM8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" {...p} /></>),
     chart: (<><Path d="M4 4v16h16" {...p} /><Path d="M8 15l3-4 3 2 4-6" {...p} /></>),
+    bot: (
+  <>
+    <Rect x={4} y={7} width={16} height={12} rx={3} {...p} />
+    <Circle cx={9} cy={13} r={1.2} fill={color} />
+    <Circle cx={15} cy={13} r={1.2} fill={color} />
+    <Path d="M12 3v4M9 3h6" {...p} />
+  </>
+),
     gear: (<><Circle cx={12} cy={12} r={3} {...p} /><Path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.5 1.5M7.1 16.9l-1.5 1.5M18.4 18.4l-1.5-1.5M7.1 7.1L5.6 5.6" {...p} /></>),
   };
   return <Svg width={size} height={size} viewBox="0 0 24 24">{paths[name]}</Svg>;
@@ -62,10 +79,8 @@ function Sidebar() {
     { key: 'live-monitoring', label: 'Live Monitoring', icon: 'video', route: '/live_monitor' },
     { key: 'billing', label: 'Billing', icon: 'cart', route: '/billing' },
     { key: 'inventory', label: 'Inventory', icon: 'box', route: '/inventory' },
-    { key: 'customers', label: 'Customers', icon: 'users', route: '/customers' },
-    { key: 'employees', label: 'Employees', icon: 'briefcase', route: '/employees' },
     { key: 'analytics', label: 'Analytics', icon: 'chart', route: '/analytics' },
-    { key: 'settings', label: 'Settings', icon: 'gear', route: '/settings' },
+    { key: 'ai-assistant', label: 'AI Assistant', icon: 'bot', route: '/chatbot' },
   ];
   return (
     <View style={styles.sidebar}>

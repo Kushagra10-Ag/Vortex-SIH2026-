@@ -30,6 +30,14 @@ function Icon({ name, color, size = 15 }: { name: string; color: string; size?: 
     grid: (<><Rect x={4} y={4} width={7} height={7} rx={1.5} {...p} /><Rect x={13} y={4} width={7} height={7} rx={1.5} {...p} /><Rect x={4} y={13} width={7} height={7} rx={1.5} {...p} /><Rect x={13} y={13} width={7} height={7} rx={1.5} {...p} /></>),
     video: (<><Rect x={3} y={7} width={13} height={10} rx={2} {...p} /><Path d="M16 10.5l5-3v9l-5-3" {...p} /></>),
     cart: (<><Circle cx={9} cy={20} r={1.4} fill={color} /><Circle cx={17} cy={20} r={1.4} fill={color} /><Path d="M3 4h2l2.2 10.6a2 2 0 0 0 2 1.6h7.3a2 2 0 0 0 2-1.6L20 8H6" {...p} /></>),
+    bot: (
+  <>
+    <Rect x={4} y={7} width={16} height={12} rx={3} {...p} />
+    <Circle cx={9} cy={13} r={1.2} fill={color} />
+    <Circle cx={15} cy={13} r={1.2} fill={color} />
+    <Path d="M12 3v4M9 3h6" {...p} />
+  </>
+),
     box: (<><Path d="M3 8l9-5 9 5v8l-9 5-9-5Z" {...p} /><Path d="M3 8l9 5 9-5M12 13v8" {...p} /></>),
     users: (<><Circle cx={9} cy={8} r={3} {...p} /><Path d="M3.5 20a5.5 5.5 0 0 1 11 0" {...p} /><Path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 15.5a5.5 5.5 0 0 1 3 4.5" {...p} /></>),
     briefcase: (<><Rect x={3} y={8} width={18} height={11} rx={2} {...p} /><Path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" {...p} /></>),
@@ -55,10 +63,8 @@ function Sidebar() {
     { key: 'live-monitoring', label: 'Live Monitoring', icon: 'video', route: '/live_monitor' },
     { key: 'billing', label: 'Billing', icon: 'cart', route: '/billing' },
     { key: 'inventory', label: 'Inventory', icon: 'box', route: '/inventory' },
-    { key: 'customers', label: 'Customers', icon: 'users', route: '/customers' },
-    { key: 'employees', label: 'Employees', icon: 'briefcase', route: '/employees' },
     { key: 'analytics', label: 'Analytics', icon: 'chart', route: '/analytics' },
-    { key: 'settings', label: 'Settings', icon: 'gear', route: '/settings' },
+    { key: 'ai-assistant', label: 'AI Assistant', icon: 'bot', route: '/chatbot' },
   ];
   return (
     <View style={styles.sidebar}>

@@ -1,331 +1,1234 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Dimensions, ActivityIndicator, Alert,
+  Animated,
+  Dimensions,
+  StyleSheet,
+  Text,
+  TouchableOpacity,
+  View,
 } from 'react-native';
-import { colors, radius } from '../../constants/theme';
+import { router } from 'expo-router';
+import Svg, { Circle, Path, Rect ,G} from 'react-native-svg';
+import { useRouter } from 'expo-router';
+import { colors } from '../../constants/theme';
 import LineChart from '../../components/LineChart';
-import { Animated } from 'react-native';
 import BarChart from '../../components/BarChart';
 import PieChart from '../../components/PieChart';
-import { fetchAnalyticsDashboard, fetchAIForecast } from '../../services/api';
+import {
+  fetchAIForecast,
+  fetchAnalyticsDashboard,
+  fetchBills,
+  fetchProducts,
+} from '../../services/api';
 
-const { width } = Dimensions.get('window');
+const { width: SCREEN_WIDTH } = Dimensions.get('window');
+
+const PAGE = '#EEF3F9';
+const CARD = '#FFFFFF';
+const BORDER = '#E5EBF2';
+const TEXT = '#1E293B';
+const MUTED = '#64748B';
+const FAINT = '#94A3B8';
+const BLUE = '#3B82F6';
+const GREEN = '#22C55E';
+const AMBER = '#F59E0B';
+const RED = '#EF4444';
+const PURPLE = '#8B5CF6';
+const TEAL = '#14B8A6';
+const SIDEBAR_WIDTH = 208;
+
+type Tab = 'business' | 'shopper' | 'queue' | 'inventory';
+
+type Point = {
+  label: string;
+  value: number;
+};
+
+type BusinessKpis = {
+  totalRevenue: number;
+  avgDaily: number;
+  topProduct: string;
+  growth: number;
+};
+
+function Icon({
+  icon,
+  color = MUTED,
+}: {
+  icon: string;
+  color?: string;
+}) {
+  const common = {
+    stroke: color,
+    strokeWidth: 2,
+    fill: 'none',
+    strokeLinecap: 'round' as const,
+    strokeLinejoin: 'round' as const,
+  };
+
+  const icons: Record<string, React.ReactNode> = {
+    grid: (
+      <>
+        <Rect x={4} y={4} width={7} height={7} rx={1.5} {...common} />
+        <Rect x={13} y={4} width={7} height={7} rx={1.5} {...common} />
+        <Rect x={4} y={13} width={7} height={7} rx={1.5} {...common} />
+        <Rect x={13} y={13} width={7} height={7} rx={1.5} {...common} />
+      </>
+    ),
+    video: (
+      <>
+        <Rect x={3} y={7} width={13} height={10} rx={2} {...common} />
+        <Path d="M16 10.5l5-3v9l-5-3" {...common} />
+      </>
+    ),
+    cart: (
+      <>
+        <Circle cx={9} cy={20} r={1.4} fill={color} />
+        <Circle cx={17} cy={20} r={1.4} fill={color} />
+        <Path d="M3 4h2l2.2 10.6a2 2 0 0 0 2 1.6h7.3a2 2 0 0 0 2-1.6L20 8H6" {...common} />
+      </>
+    ),
+    box: (
+      <>
+        <Path d="M3 8l9-5 9 5v8l-9 5-9-5Z" {...common} />
+        <Path d="M3 8l9 5 9-5M12 13v8" {...common} />
+      </>
+    ),
+    users: (
+      <>
+        <Circle cx={9} cy={8} r={3} {...common} />
+        <Path d="M3.5 20a5.5 5.5 0 0 1 11 0" {...common} />
+        <Path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 15.5a5.5 5.5 0 0 1 3 4.5" {...common} />
+      </>
+    ),
+    briefcase: (
+      <>
+        <Rect x={3} y={8} width={18} height={11} rx={2} {...common} />
+        <Path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" {...common} />
+      </>
+    ),
+    chart: (
+      <>
+        <Path d="M4 4v16h16" {...common} />
+        <Path d="M8 15l3-4 3 2 4-6" {...common} />
+      </>
+    ),
+    bot: (
+  <>
+    <Rect x={4} y={7} width={16} height={12} rx={3} {...common} />
+    <Circle cx={9} cy={13} r={1.2} fill={color} />
+    <Circle cx={15} cy={13} r={1.2} fill={color} />
+    <Path d="M12 3v4M9 3h6" {...common} />
+  </>
+),
+    gear: (
+      <>
+        <Circle cx={12} cy={12} r={3} {...common} />
+        <Path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.5 1.5M7.1 16.9l-1.5 1.5M18.4 18.4l-1.5-1.5M7.1 7.1L5.6 5.6" {...common} />
+      </>
+    ),
+  };
+
+  return (
+    <Svg width={16} height={16} viewBox="0 0 24 24">
+      {icons[icon]}
+    </Svg>
+  );
+}
+function Sidebar() {
+  const navItems = [
+    { key: 'dashboard', label: 'Dashboard', icon: 'grid', route: '/' },
+    { key: 'live-monitoring', label: 'Live Monitoring', icon: 'video', route: '/live_monitor' },
+    { key: 'billing', label: 'Billing', icon: 'cart', route: '/billing' },
+    { key: 'inventory', label: 'Inventory', icon: 'box', route: '/inventory' },
+    { key: 'analytics', label: 'Analytics', icon: 'chart', route: '/analytics' },
+    { key: 'ai-assistant', label: 'AI Assistant', icon: 'bot', route: '/chatbot' },
+  ];
+
+  return (
+    <View style={styles.sidebar}>
+      {navItems.map((item) => {
+        const isActive = item.key === 'analytics';
+
+        return (
+          <TouchableOpacity
+            key={item.key}
+            style={[styles.navItem, isActive && styles.navItemActive]}
+            onPress={() => router.push(item.route as any)}
+          >
+            <Icon icon={item.icon} color={isActive ? BLUE : MUTED} />
+            <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>
+              {item.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
+
+function TopBar() {
+  return (
+    <View style={styles.topBar}>
+      <View style={styles.topBarLeft}>
+        <View style={styles.logoBadge}>
+          <Text style={styles.logoText}>F</Text>
+        </View>
+
+        <Text style={styles.appTitle}>Retail Command Center</Text>
+      </View>
+
+      <View style={styles.topBarRight}>
+        <View style={styles.bell}>
+          <Text style={styles.bellText}>♧</Text>
+          <View style={styles.bellDot} />
+        </View>
+
+        <View style={styles.avatar}>
+          <Text style={styles.avatarText}>V</Text>
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function TabButton({
+  active,
+  label,
+  onPress,
+}: {
+  active: boolean;
+  label: string;
+  onPress: () => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={onPress}
+      activeOpacity={0.85}
+      style={[styles.tabButton, active && styles.tabButtonActive]}
+    >
+      <Text style={[styles.tabButtonTitle, active && styles.tabButtonTitleActive]}>
+        {label}
+      </Text>
+      <Text style={[styles.tabButtonHint, active && styles.tabButtonHintActive]}>
+        Click to view
+      </Text>
+    </TouchableOpacity>
+  );
+}
+
+function StatCard({
+  icon,
+  label,
+  value,
+  detail,
+  color,
+}: {
+  icon: string;
+  label: string;
+  value: string;
+  detail: string;
+  color: string;
+}) {
+  return (
+    <View style={styles.statCard}>
+      <View style={styles.statHeader}>
+        <View style={[styles.statIconWrap, { backgroundColor: `${color}18` }]}>
+          <Text style={[styles.statIcon, { color }]}>{icon}</Text>
+        </View>
+        <Text style={styles.statLabel}>{label}</Text>
+      </View>
+
+      <Text numberOfLines={1} style={styles.statValue}>
+        {value}
+      </Text>
+
+      <Text style={[styles.statDetail, { color }]}>{detail}</Text>
+    </View>
+  );
+}
+
+function Panel({
+  title,
+  subtitle,
+  children,
+  style,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
+  style?: any;
+}) {
+  return (
+    <View style={[styles.panel, style]}>
+      <View style={styles.panelHeader}>
+        <Text style={styles.panelTitle}>{title}</Text>
+        {subtitle ? <Text style={styles.panelSubtitle}>{subtitle}</Text> : null}
+      </View>
+
+      <View style={styles.panelBody}>{children}</View>
+    </View>
+  );
+}
+
+function EmptyState({ text }: { text: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyText}>{text}</Text>
+    </View>
+  );
+}
 
 export default function Analytics() {
-  const fadeAnim = useState(new Animated.Value(0))[0];
+  const fadeAnim = useRef(new Animated.Value(0)).current;
+  const isWide = SCREEN_WIDTH >= 900;
+  const isXWide = SCREEN_WIDTH >= 1280;
+
+  const [activeTab, setActiveTab] = useState<Tab>('business');
   const [period, setPeriod] = useState<'Week' | 'Month' | '6M'>('Month');
   const [loading, setLoading] = useState(true);
 
-  // ── Backend data ─────────────────────────────────────────────────────────
-  const [kpis, setKpis] = useState<{
-    totalRevenue: number;
-    avgDaily: number;
-    topProduct: string;
-    growth: number;
-  }>({ totalRevenue: 0, avgDaily: 0, topProduct: '—', growth: 0 });
-
-  const [revenueTrend, setRevenueTrend] = useState<{ label: string; value: number }[]>([]);
-  const [monthlySales, setMonthlySales] = useState<{ label: string; value: number }[]>([]);
-  const [categoryData, setCategoryData] = useState<{ label: string; value: number; color: string }[]>([]);
-  const [expiryRisk, setExpiryRisk] = useState<{ name: string; days: number }[]>([]);
-  const [forecastData, setForecastData] = useState<{ label: string; value: number }[]>([]);
-
-  useEffect(() => {
-  loadDashboard();
-
-  Animated.timing(fadeAnim, {
-    toValue: 1,
-    duration: 800,
-    useNativeDriver: true,
-  }).start();
-}, []);
-
-  const loadDashboard = async () => {
-    setLoading(true);
-    try {
-      const data = await fetchAnalyticsDashboard();
-      console.log("Dashboard data:", data);
-      // ── KPIs ──
-      if (data.kpis) setKpis(data.kpis);
-
-      // ── Charts ──
-      if (data.revenueTrend?.length)  setRevenueTrend(data.revenueTrend);
-      if (data.monthlySales?.length)  setMonthlySales(data.monthlySales);
-if (data.categoryData && data.categoryData.length > 0) {
-  const colorsList = [
-    '#4F8EF7', '#00C896', '#FFB020',
-    '#7B61FF', '#FF6B6B', '#00D4FF',
-    '#A78BFA', '#34D399'
-  ];
-
-  const colored = data.categoryData.map((item: any, i: number) => {
-    return {
-      label: item.label,
-      value: item.value,
-      color: colorsList[i % colorsList.length],
-    };
+  const [kpis, setKpis] = useState<BusinessKpis>({
+    totalRevenue: 0,
+    avgDaily: 0,
+    topProduct: '—',
+    growth: 0,
   });
 
-  setCategoryData(colored);
-}      if (data.expiryRisk?.length)    setExpiryRisk(data.expiryRisk);
+  const [revenueTrend, setRevenueTrend] = useState<Point[]>([]);
+  const [monthlySales, setMonthlySales] = useState<Point[]>([]);
+  const [categoryData, setCategoryData] = useState<
+    { label: string; value: number; color: string }[]
+  >([]);
+  const [expiryRisk, setExpiryRisk] = useState<{ name: string; days: number }[]>([]);
+  const [forecastData, setForecastData] = useState<Point[]>([]);
+  const [bills, setBills] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
 
-      // ── AI Forecast ──
-      const forecast = await fetchAIForecast();
+  useEffect(() => {
+    loadAnalytics();
+
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 450,
+      useNativeDriver: true,
+    }).start();
+  }, []);
+
+  const loadAnalytics = async () => {
+    setLoading(true);
+
+    try {
+      const [analytics, forecast, allBills, allProducts] = await Promise.all([
+        fetchAnalyticsDashboard(),
+        fetchAIForecast(),
+        fetchBills(),
+        fetchProducts(),
+      ]);
+
+      if (analytics?.kpis) setKpis(analytics.kpis);
+      if (analytics?.revenueTrend?.length) setRevenueTrend(analytics.revenueTrend);
+      if (analytics?.monthlySales?.length) setMonthlySales(analytics.monthlySales);
+      if (analytics?.expiryRisk?.length) setExpiryRisk(analytics.expiryRisk);
       if (forecast?.length) setForecastData(forecast);
 
-    } catch (e) {
-      Alert.alert("Error", "Failed to load analytics.");
-      console.log("loadDashboard error:", e);
+      if (analytics?.categoryData?.length) {
+        const chartColors = [
+          BLUE,
+          GREEN,
+          AMBER,
+          PURPLE,
+          RED,
+          TEAL,
+          '#A78BFA',
+          '#34D399',
+        ];
+
+        setCategoryData(
+          analytics.categoryData.map((item: any, index: number) => ({
+            label: item.label,
+            value: item.value,
+            color: chartColors[index % chartColors.length],
+          }))
+        );
+      }
+
+      setBills(Array.isArray(allBills) ? allBills : []);
+      setProducts(Array.isArray(allProducts) ? allProducts : []);
     } finally {
       setLoading(false);
     }
   };
 
-  // ── Period filter applied to revenueTrend ────────────────────────────────
-  const getChartData = () => {
-    if (!revenueTrend.length) return [];
-    if (period === 'Week')  return revenueTrend.slice(-7);
+  const getBusinessTrend = () => {
+    if (period === 'Week') return revenueTrend.slice(-7);
     if (period === 'Month') return revenueTrend.slice(-30);
-    return revenueTrend; // 6M — all
+    return revenueTrend;
   };
 
-  // ── Expiry risk label ─────────────────────────────────────────────────────
-  const getRiskLevel = (days: number) => {
-    if (days <= 7)  return { label: 'Critical', color: colors.danger };
-    if (days <= 20) return { label: 'High',     color: colors.warning };
-    return          { label: 'Medium',           color: colors.primary };
-  };
+  const storeMetrics = useMemo(() => {
+    const now = new Date();
+    const isToday = (date: Date) => date.toDateString() === now.toDateString();
 
-  // ── Forecast stats ────────────────────────────────────────────────────────
-  const forecastAvg = forecastData.length
-    ? Math.round(forecastData.reduce((s, d) => s + d.value, 0) / forecastData.length)
-    : 0;
-  const forecastPeak = forecastData.length
-    ? Math.max(...forecastData.map(d => d.value))
-    : 0;
-  const forecastPeakDay = forecastData.find(d => d.value === forecastPeak)?.label || '—';
-
-  // ── KPI cards config ──────────────────────────────────────────────────────
-  const kpiCards = [
-    {
-      icon: '💰',
-      label: 'Total Revenue',
-      value: `₹${(kpis.totalRevenue / 1000).toFixed(0)}K`,
-      sub: `+${kpis.growth}%`,
-      subColor: colors.accent,
-    },
-    {
-      icon: '📊',
-      label: 'Avg Daily Sales',
-      value: `₹${Math.round(kpis.avgDaily)}`,
-      sub: 'per day',
-      subColor: colors.textSub,
-    },
-    {
-      icon: '🏆',
-      label: 'Top Product',
-      value: kpis.topProduct || '—',
-      sub: 'best seller',
-      subColor: colors.primary,
-    },
-    {
-      icon: '📈',
-      label: 'Growth',
-      value: `${kpis.growth}%`,
-      sub: 'vs last period',
-      subColor: colors.accent,
-    },
-  ];
-
-  if (loading) {
-    return (
-      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
-        <ActivityIndicator color={colors.primary} size="large" />
-      </View>
+    const todayBills = bills.filter(
+      (bill) => bill.created_at && isToday(new Date(bill.created_at))
     );
-  }
 
-  return (
-    <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
+    const currentCustomers = new Set(
+      todayBills.map((bill) => bill.customer_name || bill.id)
+    ).size;
 
-      {/* KPI Grid */}
-      <View style={styles.kpiGrid}>
-        {kpiCards.map((k, i) => (
-          <View key={i} style={styles.kpiCard}>
-            <Text style={styles.kpiIcon}>{k.icon}</Text>
-            <Text style={styles.kpiValue}>{k.value}</Text>
-            <Text style={styles.kpiLabel}>{k.label}</Text>
-            <Text style={[styles.kpiSub, { color: k.subColor }]}>{k.sub}</Text>
-          </View>
-        ))}
+    const hours = Array.from({ length: 13 }, (_, index) => index + 9);
+
+    const hourlyBills = hours.map((hour) =>
+      todayBills.filter(
+        (bill) =>
+          bill.created_at &&
+          new Date(bill.created_at).getHours() === hour
+      ).length
+    );
+
+    const footfallTrend = hours.map((hour, index) => ({
+      label: `${hour}:00`,
+      value: hourlyBills[index] * 3 + (hourlyBills[index] ? 2 : 0),
+    }));
+
+    const queueTrend = hours.map((hour, index) => ({
+      label: `${hour}:00`,
+      value: Math.round(hourlyBills[index] * 1.4),
+    }));
+
+    const todayFootfall = footfallTrend.reduce(
+      (sum, item) => sum + item.value,
+      0
+    );
+
+    const peakFootfall = footfallTrend.reduce(
+      (best, item) => (item.value > best.value ? item : best),
+      { label: '—', value: 0 }
+    );
+
+    const peakQueue = Math.max(
+      ...queueTrend.map((item) => item.value),
+      0
+    );
+
+    const avgQueue = queueTrend.length
+      ? Math.round(
+          queueTrend.reduce((sum, item) => sum + item.value, 0) /
+            queueTrend.length
+        )
+      : 0;
+
+    const lowStock = products.filter(
+      (product) =>
+        product.quantity > 0 &&
+        product.quantity < (product.min_stock_level ?? 0)
+    );
+
+    const critical = products.filter((product) => product.quantity <= 0);
+
+    const healthy = products.filter(
+      (product) => product.quantity >= (product.min_stock_level ?? 0)
+    );
+
+    const inventoryHealth = products.length
+      ? Math.round((healthy.length / products.length) * 100)
+      : 100;
+
+    const restockingTrend = products
+      .slice(0, 7)
+      .map((product, index) => ({
+        label: product.name?.slice(0, 7) || `Item ${index + 1}`,
+        value: Math.max(0, (product.min_stock_level ?? 0) - product.quantity),
+      }))
+      .reverse();
+
+    return {
+      currentCustomers,
+      todayFootfall,
+      peakHour: peakFootfall.value ? peakFootfall.label : '—',
+      avgDwellTime: 0,
+      footfallTrend,
+      avgQueue,
+      congestion: Math.min(100, peakQueue * 20),
+      waitingTime: Math.round(peakQueue * 1.5),
+      queueTrend,
+      healthy,
+      lowStock,
+      critical,
+      inventoryHealth,
+      restockingTrend,
+    };
+  }, [bills, products]);
+
+  const chartWidth = isXWide ? 420 : isWide ? 300 : SCREEN_WIDTH - 48;
+  const businessKpiBasis = isXWide ? '23.8%' : isWide ? '48.8%' : '100%';
+
+  const renderBusiness = () => (
+    <>
+      <View style={styles.grid}>
+        <View style={[styles.statWrapper, { flexBasis: businessKpiBasis }]}>
+          <StatCard
+            icon="₹"
+            label="Total Revenue"
+            value={`₹${(kpis.totalRevenue / 1000).toFixed(0)}K`}
+            detail={`+${kpis.growth}% vs previous period`}
+            color={GREEN}
+          />
+        </View>
+
+        <View style={[styles.statWrapper, { flexBasis: businessKpiBasis }]}>
+          <StatCard
+            icon="⌁"
+            label="Avg Daily Sales"
+            value={`₹${Math.round(kpis.avgDaily)}`}
+            detail="Average daily revenue"
+            color={BLUE}
+          />
+        </View>
+
+        <View style={[styles.statWrapper, { flexBasis: businessKpiBasis }]}>
+          <StatCard
+            icon="★"
+            label="Top Product"
+            value={kpis.topProduct || '—'}
+            detail="Best-selling product"
+            color={PURPLE}
+          />
+        </View>
+
+        <View style={[styles.statWrapper, { flexBasis: businessKpiBasis }]}>
+          <StatCard
+            icon="↗"
+            label="Growth"
+            value={`${kpis.growth}%`}
+            detail="Compared with last period"
+            color={TEAL}
+          />
+        </View>
       </View>
 
-      {/* Revenue Trend */}
-<Animated.View
-  style={[
-    styles.card,
-    {
-      opacity: fadeAnim,
-      transform: [{
-        translateY: fadeAnim.interpolate({
-          inputRange: [0, 1],
-          outputRange: [30, 0],
-        }),
-      }],
-    },
-  ]}
->        <View style={styles.cardHeader}>
-          <Text style={styles.cardTitle}>Revenue Trend</Text>
+      <View style={styles.dashboardRow}>
+        <Panel
+          title="Sales Trend"
+          subtitle="Revenue over the selected period"
+          style={styles.largePanel}
+        >
           <View style={styles.periodRow}>
-            {(['Week', 'Month', '6M'] as const).map(p => (
+            {(['Week', 'Month', '6M'] as const).map((item) => (
               <TouchableOpacity
-                key={p}
-                onPress={() => setPeriod(p)}
-                style={[styles.periodPill, period === p && styles.periodActive]}
+                key={item}
+                onPress={() => setPeriod(item)}
+                style={[
+                  styles.periodButton,
+                  period === item && styles.periodButtonActive,
+                ]}
               >
-                <Text style={[styles.periodText, period === p && styles.periodTextActive]}>{p}</Text>
+                <Text
+                  style={[
+                    styles.periodText,
+                    period === item && styles.periodTextActive,
+                  ]}
+                >
+                  {item}
+                </Text>
               </TouchableOpacity>
             ))}
           </View>
-        </View>
-        {getChartData().length > 0
-          ? <LineChart data={getChartData()} width={width - 48} height={200} color={colors.primary}  />
-          : <Text style={styles.emptyText}>No trend data yet</Text>
-        }
-</Animated.View>
-      {/* Bar Chart + Pie side by side */}
-<Animated.View style={[styles.row, { opacity: fadeAnim }]}>
-          <View style={[styles.card, { flex: 1.3 }]}>
-          <Text style={styles.cardTitle}>Monthly Sales</Text>
-          {monthlySales.length > 0
-            ? <BarChart data={monthlySales} width={(width - 56) * 0.55} height={170} color={colors.purple} />
-            : <Text style={styles.emptyText}>No data yet</Text>
-          }
-        </View>
-        <View style={[styles.card, { flex: 1 }]}>
-          <Text style={[styles.cardTitle, { marginBottom: 12 }]}>By Category</Text>
-          {categoryData.length > 0
-            ? <PieChart data={categoryData} size={110} />
-            : <Text style={styles.emptyText}>No data yet</Text>
-          }
-        </View>
-</Animated.View>
-      {/* AI Forecast */}
-<Animated.View style={[styles.card, { backgroundColor: colors.dark, opacity: fadeAnim }]}>
-          <View style={styles.cardHeader}>
-          <View>
-            <Text style={[styles.cardTitle, { color: '#fff' }]}>AI Sales Forecast</Text>
-            <Text style={[styles.cardSub, { color: 'rgba(255,255,255,0.5)' }]}>Next 7 days prediction</Text>
-          </View>
-          <View style={styles.aiBadge}>
-            <Text style={styles.aiBadgeText}>🤖 AI</Text>
-          </View>
-        </View>
-        {forecastData.length > 0
-          ? <>
-              <LineChart data={forecastData} width={width - 48} height={160} color={colors.accent}  />
-              <View style={styles.forecastInfo}>
-                <View style={styles.forecastStat}>
-                  <Text style={styles.forecastStatVal}>₹{forecastPeak.toLocaleString()}</Text>
-                  <Text style={styles.forecastStatLabel}>Peak ({forecastPeakDay})</Text>
-                </View>
-                <View style={styles.forecastStat}>
-                  <Text style={styles.forecastStatVal}>₹{forecastAvg.toLocaleString()}</Text>
-                  <Text style={styles.forecastStatLabel}>Avg Forecast</Text>
-                </View>
-                <View style={styles.forecastStat}>
-                  <Text style={[styles.forecastStatVal, { color: colors.accent }]}>+{kpis.growth}%</Text>
-                  <Text style={styles.forecastStatLabel}>vs This Week</Text>
-                </View>
-              </View>
-            </>
-          : <Text style={[styles.emptyText, { color: 'rgba(255,255,255,0.4)' }]}>Forecast unavailable</Text>
-        }
-</Animated.View>
-      {/* Expiry Risk Table */}
-      <View style={styles.card}>
-        <Text style={styles.cardTitle}>Expiry Risk Items</Text>
-        {expiryRisk.length > 0
-          ? expiryRisk.map((item, i) => {
-              const risk = getRiskLevel(item.days);
+
+          {getBusinessTrend().length ? (
+            <LineChart
+              data={getBusinessTrend()}
+              width={chartWidth}
+              height={150}
+              color={BLUE}
+            />
+          ) : (
+            <EmptyState text="No sales trend data yet" />
+          )}
+        </Panel>
+
+        <Panel
+          title="Monthly Sales"
+          subtitle="Revenue by month"
+          style={styles.smallPanel}
+        >
+          {monthlySales.length ? (
+            <BarChart
+              data={monthlySales}
+              width={chartWidth * 0.75}
+              height={150}
+              color={PURPLE}
+            />
+          ) : (
+            <EmptyState text="No monthly sales data" />
+          )}
+        </Panel>
+
+        <Panel
+          title="Product Categories"
+          subtitle="Sales distribution"
+          style={styles.smallPanel}
+        >
+          {categoryData.length ? (
+            <PieChart data={categoryData} size={130} />
+          ) : (
+            <EmptyState text="No category data" />
+          )}
+        </Panel>
+      </View>
+
+      <View style={styles.dashboardRow}>
+        <Panel
+          title="AI Sales Forecast"
+          subtitle="Projected demand for the next seven days"
+          style={styles.largePanel}
+        >
+          {forecastData.length ? (
+            <LineChart
+              data={forecastData}
+              width={chartWidth}
+              height={125}
+              color={TEAL}
+            />
+          ) : (
+            <EmptyState text="Forecast unavailable" />
+          )}
+        </Panel>
+
+        <Panel
+          title="Expiry Risk Items"
+          subtitle="Products requiring attention"
+          style={styles.smallPanel}
+        >
+          {expiryRisk.length ? (
+            expiryRisk.slice(0, 4).map((item, index) => {
+              const riskColor =
+                item.days <= 7
+                  ? RED
+                  : item.days <= 20
+                    ? AMBER
+                    : BLUE;
+
               return (
-                <View key={i} style={styles.riskRow}>
-                  <Text style={styles.riskName}>{item.name}</Text>
-                  <Text style={styles.riskDays}>Expires in {item.days}d</Text>
-                  <View style={[styles.riskBadge, { backgroundColor: risk.color }]}>
-                    <Text style={styles.riskBadgeText}>{risk.label}</Text>
+                <View key={`${item.name}-${index}`} style={styles.riskRow}>
+                  <View style={{ flex: 1 }}>
+                    <Text numberOfLines={1} style={styles.riskName}>
+                      {item.name}
+                    </Text>
+                    <Text style={styles.riskDays}>Expires in {item.days} days</Text>
+                  </View>
+
+                  <View
+                    style={[
+                      styles.riskBadge,
+                      { backgroundColor: `${riskColor}18` },
+                    ]}
+                  >
+                    <Text style={[styles.riskBadgeText, { color: riskColor }]}>
+                      {item.days <= 7 ? 'Critical' : 'Monitor'}
+                    </Text>
                   </View>
                 </View>
               );
             })
-          : <Text style={styles.emptyText}>No expiry risks 🎉</Text>
-        }
+          ) : (
+            <EmptyState text="No expiry risks" />
+          )}
+        </Panel>
+      </View>
+    </>
+  );
+
+  const renderShopper = () => (
+    <>
+      <View style={styles.grid}>
+        <View style={styles.statWrapper}>
+          <StatCard
+            icon="♙"
+            label="Current Customers"
+            value={`${storeMetrics.currentCustomers}`}
+            detail="Customers in store now"
+            color={BLUE}
+          />
+        </View>
+
+        <View style={styles.statWrapper}>
+          <StatCard
+            icon="♧"
+            label="Today's Footfall"
+            value={`${storeMetrics.todayFootfall}`}
+            detail="Estimated visitors today"
+            color={GREEN}
+          />
+        </View>
+
+        <View style={styles.statWrapper}>
+          <StatCard
+            icon="◷"
+            label="Peak Hour"
+            value={storeMetrics.peakHour}
+            detail="Highest traffic period"
+            color={AMBER}
+          />
+        </View>
+
+        <View style={styles.statWrapper}>
+          <StatCard
+            icon="◌"
+            label="Average Dwell Time"
+            value={`${storeMetrics.avgDwellTime} min`}
+            detail="Requires camera dwell data"
+            color={PURPLE}
+          />
+        </View>
       </View>
 
-      <View style={{ height: 100 }} />
-    </ScrollView>
+      <View style={styles.dashboardRow}>
+        <Panel
+          title="Footfall Trend"
+          subtitle="Estimated store visitors by hour"
+          style={styles.fullPanel}
+        >
+          <LineChart
+            data={storeMetrics.footfallTrend}
+            width={isXWide ? 960 : chartWidth}
+            height={260}
+            color={GREEN}
+          />
+        </Panel>
+      </View>
+    </>
+  );
+
+  const renderQueue = () => (
+    <>
+      <View style={styles.grid}>
+        <View style={styles.statWrapper}>
+          <StatCard
+            icon="♙"
+            label="Average Queue"
+            value={`${storeMetrics.avgQueue}`}
+            detail="Average people waiting"
+            color={BLUE}
+          />
+        </View>
+
+        <View style={styles.statWrapper}>
+          <StatCard
+            icon="⚠"
+            label="Congestion"
+            value={`${storeMetrics.congestion}%`}
+            detail={
+              storeMetrics.congestion > 70
+                ? 'High congestion'
+                : storeMetrics.congestion > 40
+                  ? 'Moderate congestion'
+                  : 'Low congestion'
+            }
+            color={
+              storeMetrics.congestion > 70
+                ? RED
+                : storeMetrics.congestion > 40
+                  ? AMBER
+                  : GREEN
+            }
+          />
+        </View>
+
+        <View style={styles.statWrapper}>
+          <StatCard
+            icon="◷"
+            label="Waiting Time"
+            value={`${storeMetrics.waitingTime} min`}
+            detail="Estimated average wait"
+            color={PURPLE}
+          />
+        </View>
+      </View>
+
+      <View style={styles.dashboardRow}>
+        <Panel
+          title="Queue Trend"
+          subtitle="Queue length throughout the day"
+          style={styles.fullPanel}
+        >
+          <BarChart
+            data={storeMetrics.queueTrend}
+            width={isXWide ? 960 : chartWidth}
+            height={260}
+            color={PURPLE}
+          />
+        </Panel>
+      </View>
+    </>
+  );
+
+  const renderInventory = () => {
+    const inventoryData = [
+      {
+        label: 'Healthy',
+        value: storeMetrics.healthy.length,
+        color: GREEN,
+      },
+      {
+        label: 'Low Stock',
+        value: storeMetrics.lowStock.length,
+        color: AMBER,
+      },
+      {
+        label: 'Critical',
+        value: storeMetrics.critical.length,
+        color: RED,
+      },
+    ];
+
+    return (
+      <>
+        <View style={styles.grid}>
+          <View style={styles.statWrapper}>
+            <StatCard
+              icon="✓"
+              label="Healthy Products"
+              value={`${storeMetrics.healthy.length}`}
+              detail={`${storeMetrics.inventoryHealth}% inventory health`}
+              color={GREEN}
+            />
+          </View>
+
+          <View style={styles.statWrapper}>
+            <StatCard
+              icon="!"
+              label="Low Stock"
+              value={`${storeMetrics.lowStock.length}`}
+              detail="Needs restocking soon"
+              color={AMBER}
+            />
+          </View>
+
+          <View style={styles.statWrapper}>
+            <StatCard
+              icon="×"
+              label="Critical Stock"
+              value={`${storeMetrics.critical.length}`}
+              detail="Restock immediately"
+              color={RED}
+            />
+          </View>
+        </View>
+
+        <View style={styles.dashboardRow}>
+          <Panel
+            title="Inventory Health"
+            subtitle="Current stock condition"
+            style={styles.smallPanel}
+          >
+            <PieChart data={inventoryData} size={170} />
+          </Panel>
+
+          <Panel
+            title="Restocking Trend"
+            subtitle="Products below their stock threshold"
+            style={styles.largePanel}
+          >
+            {storeMetrics.restockingTrend.length ? (
+              <BarChart
+                data={storeMetrics.restockingTrend}
+                width={chartWidth}
+                height={230}
+                color={TEAL}
+              />
+            ) : (
+              <EmptyState text="No restocking data yet" />
+            )}
+          </Panel>
+        </View>
+      </>
+    );
+  };
+
+  const tabContent = {
+    business: renderBusiness(),
+    shopper: renderShopper(),
+    queue: renderQueue(),
+    inventory: renderInventory(),
+  };
+
+  return (
+    <View style={styles.appShell}>
+      <TopBar />
+
+      <View style={styles.body}>
+        {isWide && <Sidebar />}
+
+        <View style={styles.content}>
+          <View style={styles.contentHeader}>
+            <View>
+              <Text style={styles.pageTitle}>Analytics</Text>
+              <Text style={styles.pageSubtitle}>
+              </Text>
+            </View>
+
+            <TouchableOpacity style={styles.refreshButton} onPress={loadAnalytics}>
+              <Text style={styles.refreshButtonText}>↻ Refresh</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={styles.tabs}>
+            <TabButton
+              active={activeTab === 'business'}
+              label="Business Analytics"
+              onPress={() => setActiveTab('business')}
+            />
+            <TabButton
+              active={activeTab === 'shopper'}
+              label="Shopper Analytics"
+              onPress={() => setActiveTab('shopper')}
+            />
+            <TabButton
+              active={activeTab === 'queue'}
+              label="Queue Analytics"
+              onPress={() => setActiveTab('queue')}
+            />
+            <TabButton
+              active={activeTab === 'inventory'}
+              label="Inventory Analytics"
+              onPress={() => setActiveTab('inventory')}
+            />
+          </View>
+
+          {loading ? (
+            <View style={styles.loadingArea}>
+              <Text style={styles.loadingText}>Loading analytics…</Text>
+            </View>
+          ) : (
+            <Animated.View style={[styles.analyticsArea, { opacity: fadeAnim }]}>
+              {tabContent[activeTab]}
+            </Animated.View>
+          )}
+        </View>
+      </View>
+    </View>
   );
 }
-  const BG = '#0D1B2A';
-const CARD = '#132032';
-const BORDER = 'rgba(255,255,255,0.07)';
+
 const styles = StyleSheet.create({
+  appShell: {
+    flex: 1,
+    backgroundColor: PAGE,
+  },
+  topBar: {
+    flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between',
+    paddingHorizontal: 16, paddingVertical: 12,
+    backgroundColor: CARD, borderBottomWidth: 1, borderBottomColor: BORDER,
+  },
 
-
-container: {
-  flex: 1,
-  backgroundColor: BG,
-  padding: 14,
+topBarLeft: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  logoBadge: { width: 30, height: 30, borderRadius: 9, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center' },
+  logoText: {
+  color: '#fff',
+  fontWeight: '900',
+  fontSize: 14,
 },
 
-card: {
+appTitle: {
+  fontSize: 17,
+  fontWeight: '900',
+  color: TEXT,
+  letterSpacing: -0.4,
+},
+
+topBarRight: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 12,
+},
+  bell: { width: 34, height: 34, borderRadius: 11, backgroundColor: CARD, borderWidth: 1, borderColor: BORDER, alignItems: 'center', justifyContent: 'center' },
+  bellDot: { position: 'absolute', top: 8, right: 9, width: 6, height: 6, borderRadius: 3, backgroundColor: RED },
+  avatar: { width: 34, height: 34, borderRadius: 17, backgroundColor: BLUE, alignItems: 'center', justifyContent: 'center' },
+  avatarText: { color: '#fff', fontWeight: '800', fontSize: 14 },
+  body: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  sidebar: {
+  width: SIDEBAR_WIDTH,
   backgroundColor: CARD,
-  borderRadius: radius.md,
-  padding: 16,
-  marginBottom: 14,
+  borderRightWidth: 1,
+  borderRightColor: BORDER,
+  paddingVertical: 14,
+  paddingHorizontal: 10,
+  gap: 3,
+},
+  navItem: {
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 10,
+  paddingVertical: 10,
+  paddingHorizontal: 12,
+  borderRadius: 10,
+},
+  navItemActive: {
+    backgroundColor: '#EAF1FF',
+  },
+  icon: {
+    width: 20,
+    fontSize: 17,
+    textAlign: 'center',
+  },
+  navLabel: {
+    color: MUTED,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  navLabelActive: {
+    color: BLUE,
+    fontWeight: '800',
+  },
+  content: {
+  flex: 1,
+  backgroundColor: PAGE,
+  padding: 10,
+  gap: 10,
+},
+
+contentHeader: {
+  height: 40,
+  marginBottom: 4,
+  flexDirection: 'row',
+  alignItems: 'center',
+  justifyContent: 'space-between',
+},
+
+pageTitle: {
+  fontSize: 20,
+  fontWeight: '900',
+  color: TEXT,
+},
+
+pageSubtitle: {
+  fontSize: 10,
+  color: FAINT,
+  marginTop: 1,
+},
+  refreshButton: {
+    paddingHorizontal: 14,
+    paddingVertical: 9,
+    borderRadius: 9,
+    backgroundColor: BLUE,
+  },
+  refreshButtonText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  tabs: {
+  height: 48,
+  flexDirection: 'row',
+  gap: 10,
+  marginBottom: 10,
+},
+
+tabButton: {
+  flex: 1,
+  borderRadius: 10,
+  justifyContent: 'center',
+  alignItems: 'center',
+  backgroundColor: CARD,
   borderWidth: 1,
   borderColor: BORDER,
 },
-  kpiGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 10, marginBottom: 14 },
-kpiCard: {
-  flex: 1,
-  minWidth: '45%',
-  backgroundColor: '#1E293B',
-  borderRadius: 16,
-  padding: 14,
+  tabButtonActive: {
+    backgroundColor: '#173F7A',
+    borderColor: '#173F7A',
+  },
+  tabButtonTitle: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: '800',
+  },
+  tabButtonTitleActive: {
+    color: '#FFFFFF',
+  },
+  tabButtonHint: {
+    color: FAINT,
+    fontSize: 9,
+    marginTop: 3,
+  },
+  tabButtonHintActive: {
+    color: '#D8E6FF',
+  },
+  analyticsArea: {
+    flex: 1,
+    gap: 10,
+  },
+  loadingArea: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: MUTED,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  grid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  statWrapper: {
+    flexGrow: 1,
+    flexBasis: '23.8%',
+  },
+  statCard: {
+  height: 104,
+  padding: 11,
+  borderRadius: 14,
+  backgroundColor: CARD,
   borderWidth: 1,
-  borderColor: 'rgba(255,255,255,0.05)',
-},  kpiIcon: { fontSize: 22, marginBottom: 6 },
-  kpiValue: { fontSize: 20, fontWeight: '900', color: '#E6EDF3', letterSpacing: -0.5 },
-  kpiLabel: { fontSize: 11, color: '#94A3B8', marginTop: 2 },
-  kpiSub: { fontSize: 11, fontWeight: '600', marginTop: 4 },
-  cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  row: { flexDirection: 'row', gap: 12, marginBottom: 14 },
-  periodRow: { flexDirection: 'row', gap: 4, backgroundColor: colors.bg, borderRadius: 10, padding: 3 },
-  periodPill: { paddingHorizontal: 12, paddingVertical: 5, borderRadius: 8 },
-  periodActive: { backgroundColor: colors.dark },
-  periodText: { fontSize: 11, color: colors.textSub, fontWeight: '600' },
-  periodTextActive: { color: '#fff' },
-  aiBadge: { backgroundColor: colors.accent + '22', paddingHorizontal: 10, paddingVertical: 5, borderRadius: 10 },
-  aiBadgeText: { color: colors.accent, fontSize: 11, fontWeight: '700' },
-  forecastInfo: { flexDirection: 'row', justifyContent: 'space-around', marginTop: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.1)' },
-  forecastStat: { alignItems: 'center' },
-  forecastStatVal: { fontSize: 16, fontWeight: '800', color: '#fff' },
-  forecastStatLabel: { fontSize: 10, color: 'rgba(255,255,255,0.5)', marginTop: 2 },
-  riskRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: 'rgba(255,255,255,0.06)' },
-riskName: { 
-  flex: 1, 
-  fontSize: 13, 
-  fontWeight: '700', 
-  color: '#E6EDF3'   // ✅ bright like Sales screen
-},  riskDays: { 
-  fontSize: 12, 
-  color: '#94A3B8'   // softer but visible
+  borderColor: BORDER,
 },
-  riskBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8, marginLeft: 10 },
-  riskBadgeText: { color: '#fff', fontSize: 10, fontWeight: '800' },
-  cardTitle: { color: '#fff', fontWeight: '800' },
-cardSub: { color: 'rgba(255,255,255,0.4)' },
-emptyText: { color: 'rgba(255,255,255,0.4)' },
+
+
+  statHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  statIconWrap: {
+    width: 27,
+    height: 27,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+  },
+  statIcon: {
+    fontSize: 15,
+    fontWeight: '900',
+  },
+  statLabel: {
+    flex: 1,
+    color: MUTED,
+    fontSize: 11,
+    fontWeight: '700',
+  },
+  statValue: {
+    color: TEXT,
+    fontSize: 22,
+    fontWeight: '900',
+    marginTop: 10,
+  },
+  statDetail: {
+    fontSize: 10,
+    fontWeight: '700',
+    marginTop: 2,
+  },
+  dashboardRow: {
+    flexDirection: 'row',
+    gap: 10,
+    flex: 1,
+  },
+  panel: {
+  flexGrow: 1,
+  minHeight: 0,
+  padding: 12,
+  borderRadius: 14,
+  backgroundColor: CARD,
+  borderWidth: 1,
+  borderColor: BORDER,
+},
+  fullPanel: {
+    flex: 1,
+  },
+  largePanel: {
+    flex: 1.65,
+  },
+  smallPanel: {
+    flex: 1,
+  },
+  panelHeader: {
+    marginBottom: 6,
+  },
+  panelTitle: {
+    color: TEXT,
+    fontSize: 13,
+    fontWeight: '800',
+  },
+  panelSubtitle: {
+    color: FAINT,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  panelBody: {
+    flex: 1,
+    minHeight: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  periodRow: {
+    position: 'absolute',
+    top: -35,
+    right: 0,
+    flexDirection: 'row',
+    gap: 4,
+  },
+  periodButton: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#F1F5F9',
+  },
+  periodButtonActive: {
+    backgroundColor: BLUE,
+  },
+  periodText: {
+    color: MUTED,
+    fontSize: 9,
+    fontWeight: '700',
+  },
+  periodTextActive: {
+    color: '#FFFFFF',
+  },
+  emptyState: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyText: {
+    color: FAINT,
+    fontSize: 12,
+  },
+  riskRow: {
+    width: '100%',
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: '#F1F5F9',
+  },
+  riskName: {
+    color: TEXT,
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  riskDays: {
+    color: MUTED,
+    fontSize: 10,
+    marginTop: 2,
+  },
+  riskBadge: {
+    paddingHorizontal: 7,
+    paddingVertical: 4,
+    borderRadius: 7,
+  },
+  bellText: {
+  fontSize: 19,
+  color: MUTED,
+},
+  riskBadgeText: {
+    fontSize: 9,
+    fontWeight: '800',
+  },
 });
