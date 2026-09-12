@@ -97,54 +97,139 @@ function Sparkline({ points, color, w, h = 26 }: { points: number[]; color: stri
 
 // ── Area / line chart with axes ──────────────────────────────────────────────
 function AreaChart({
-  data, w, h, color, animate = true,
-}: { data: { label: string; value: number }[]; w: number; h: number; color: string; animate?: boolean }) {
-  const anim = useRef(new Animated.Value(0)).current;
-  const [p, setP] = useState(animate ? 0 : 1);
+  data,
+  w,
+  h,
+  color,
+  animate = false,
+}: {
+  data: { label: string; value: number }[];
+  w: number;
+  h: number;
+  color: string;
+  animate?: boolean;
+}) {
+  const anim = useRef(new Animated.Value(1)).current;
+  const [p, setP] = useState(1);
+
   useEffect(() => {
-    if (!animate) return;
+    if (!animate) {
+      setP(1);
+      return;
+    }
+
     anim.setValue(0);
-    const id = anim.addListener(({ value }) => setP(value));
-    Animated.timing(anim, { toValue: 1, duration: 1200, useNativeDriver: false }).start();
-    return () => anim.removeListener(id);
-  }, [data, w]);
 
-  if (w < 2 || data.length < 2) return <View style={{ height: h }} />;
-  const padL = 40, padR = 10, padT = 10, padB = 26;
-  const cw = w - padL - padR, ch = h - padT - padB;
+    const id = anim.addListener(({ value }) => {
+      setP(value);
+    });
+
+    Animated.timing(anim, {
+      toValue: 1,
+      duration: 1200,
+      useNativeDriver: false,
+    }).start();
+
+    return () => {
+      anim.removeListener(id);
+    };
+  }, [animate]);
+
+  if (w < 2 || data.length < 2) {
+    return <View style={{ height: h }} />;
+  }
+
+  const padL = 40;
+  const padR = 10;
+  const padT = 10;
+  const padB = 26;
+
+  const cw = w - padL - padR;
+  const ch = h - padT - padB;
+
   const vals = data.map(d => d.value || 0);
-  const max = Math.max(...vals) * 1.1 || 1, min = 0;
-  const range = max - min || 1;
-  const toX = (i: number) => padL + (i / (data.length - 1)) * cw;
-  const toY = (v: number) => padT + ch - ((v - min) / range) * ch;
 
-  const all = data.map((d, i) => ({ x: toX(i), y: toY(d.value) }));
+  const max = Math.max(...vals) * 1.1 || 1;
+  const min = 0;
+  const range = max - min || 1;
+
+  const toX = (i: number) =>
+    padL + (i / (data.length - 1)) * cw;
+
+  const toY = (v: number) =>
+    padT + ch - ((v - min) / range) * ch;
+
+  const all = data.map((d, i) => ({
+    x: toX(i),
+    y: toY(d.value),
+  }));
+
   const total = all.length - 1;
   const idx = p * total;
-  const b = Math.floor(idx), n = Math.min(b + 1, total), t = idx - b;
-  const tip = { x: all[b].x + (all[n].x - all[b].x) * t, y: all[b].y + (all[n].y - all[b].y) * t };
-  const pts = [...all.slice(0, b + 1), tip];
+
+  const b = Math.floor(idx);
+  const n = Math.min(b + 1, total);
+  const t = idx - b;
+
+  const tip = {
+    x: all[b].x + (all[n].x - all[b].x) * t,
+    y: all[b].y + (all[n].y - all[b].y) * t,
+  };
+
+  const pts = [
+    ...all.slice(0, b + 1),
+    tip,
+  ];
 
   const line = pts.reduce((acc, pt, i) => {
-    if (i === 0) return `M${pt.x},${pt.y}`;
+    if (i === 0) {
+      return `M${pt.x},${pt.y}`;
+    }
+
     const prev = pts[i - 1];
     const cx = (prev.x + pt.x) / 2;
+
     return `${acc} C${cx},${prev.y} ${cx},${pt.y} ${pt.x},${pt.y}`;
   }, '');
-  const area = pts.length > 1 ? `${line} L${pts[pts.length - 1].x},${padT + ch} L${pts[0].x},${padT + ch} Z` : '';
-  const ticks = Array.from({ length: 4 }, (_, i) => Math.round(min + (range / 3) * i));
+
+  const area =
+    pts.length > 1
+      ? `${line} L${pts[pts.length - 1].x},${padT + ch} L${pts[0].x},${padT + ch} Z`
+      : '';
+
+  const ticks = Array.from(
+    { length: 4 },
+    (_, i) => Math.round(min + (range / 3) * i)
+  );
+
   const gid = `area${color.replace('#', '')}`;
 
   return (
     <Svg width={w} height={h}>
       <Defs>
-        <LinearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
-          <Stop offset="0" stopColor={color} stopOpacity="0.28" />
-          <Stop offset="1" stopColor={color} stopOpacity="0.02" />
+        <LinearGradient
+          id={gid}
+          x1="0"
+          y1="0"
+          x2="0"
+          y2="1"
+        >
+          <Stop
+            offset="0"
+            stopColor={color}
+            stopOpacity="0.28"
+          />
+          <Stop
+            offset="1"
+            stopColor={color}
+            stopOpacity="0.02"
+          />
         </LinearGradient>
       </Defs>
+
       {ticks.map((v, i) => {
         const y = toY(v);
+
         return (
           <G key={i}>
             <Line
@@ -158,9 +243,33 @@ function AreaChart({
           </G>
         );
       })}
-      {area ? <Path d={area} fill={`url(#${gid})`} /> : null}
-      {line ? <Path d={line} stroke={color} strokeWidth={2.5} fill="none" strokeLinecap="round" strokeLinejoin="round" /> : null}
-      <Circle cx={tip.x} cy={tip.y} r={4} fill={color} stroke="#fff" strokeWidth={2} />
+
+      {area ? (
+        <Path
+          d={area}
+          fill={`url(#${gid})`}
+        />
+      ) : null}
+
+      {line ? (
+        <Path
+          d={line}
+          stroke={color}
+          strokeWidth={2.5}
+          fill="none"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        />
+      ) : null}
+
+      <Circle
+        cx={tip.x}
+        cy={tip.y}
+        r={4}
+        fill={color}
+        stroke="#fff"
+        strokeWidth={2}
+      />
     </Svg>
   );
 }
@@ -337,9 +446,37 @@ export default function Dashboard() {
   };
 
   useEffect(() => {
-    loadData();
-    Animated.timing(fadeAnim, { toValue: 1, duration: 500, useNativeDriver: true }).start();
-  }, []);
+  let mounted = true;
+
+  const refreshDashboard = async () => {
+    try {
+      const res = await fetchFullDashboard();
+
+      if (mounted) {
+        setFull(res?.data ?? res ?? null);
+      }
+    } catch (error) {
+      console.log('[Dashboard] Auto refresh failed:', error);
+    }
+  };
+
+  refreshDashboard();
+
+  const interval = setInterval(() => {
+    refreshDashboard();
+  }, 2000);
+
+  Animated.timing(fadeAnim, {
+    toValue: 1,
+    duration: 500,
+    useNativeDriver: true,
+  }).start();
+
+  return () => {
+    mounted = false;
+    clearInterval(interval);
+  };
+}, []);
 
   const onRefresh = async () => {
     setRefreshing(true);
