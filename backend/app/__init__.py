@@ -1,6 +1,7 @@
 from flask import Flask
 from .config import Config
 from .db import db
+
 from flask_migrate import Migrate
 from flask_cors import CORS
 from flask_jwt_extended import JWTManager
@@ -23,29 +24,41 @@ from app.middleware import register_error_handlers
 migrate = Migrate()
 jwt = JWTManager()
 
+
 def create_app():
     app = Flask(__name__)
+
+    # Load configuration
     app.config.from_object(Config)
+
+    # Upload size limit
     app.config["MAX_CONTENT_LENGTH"] = Config.MAX_CONTENT_LENGTH
 
-    # Enable CORS only for explicitly configured frontend origins.
-    if app.config.get("FRONTEND_ORIGINS"):
-        CORS(app, origins=app.config["FRONTEND_ORIGINS"])
+    # CORS
+    if getattr(Config, "FRONTEND_ORIGINS", None):
+        CORS(
+            app,
+            origins=Config.FRONTEND_ORIGINS,
+            supports_credentials=True,
+        )
+    else:
+        # Development fallback
+        CORS(app, supports_credentials=True)
 
     # Initialize extensions
     db.init_app(app)
     migrate.init_app(app, db)
     jwt.init_app(app)
 
-    # Register error handlers
+    # Register global error handlers
     register_error_handlers(app)
 
-    # IMPORTANT: Load models (for migrations)
+    # Import models (required for Flask-Migrate)
     from app import models
 
     # Register Blueprints
-    app.register_blueprint(chatbot_bp, url_prefix="/chatbot")
     app.register_blueprint(auth_bp, url_prefix="/auth")
+    app.register_blueprint(chatbot_bp, url_prefix="/chatbot")
     app.register_blueprint(inventory_bp, url_prefix="/inventory")
     app.register_blueprint(billing_bp, url_prefix="/billing")
     app.register_blueprint(analytics_bp, url_prefix="/analytics")

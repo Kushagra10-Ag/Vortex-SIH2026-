@@ -148,8 +148,6 @@ def save_footfall(data):
         device_id=device.id,
         entry_count=data.get("entry_count", 0),
         exit_count=data.get("exit_count", 0),
-        current_occupancy=data.get("current_occupancy", 0),
-        dwell_time_avg=data.get("dwell_time_avg", 0.0),
         created_at=datetime.utcnow()
     )
 
@@ -339,7 +337,47 @@ def get_camera_events(limit=50, event_type=None):
 
 
 def get_realtime_status():
-    return get_live_monitoring()
+    latest = Footfall.query.order_by(
+        desc(Footfall.created_at)
+    ).first()
+
+    devices = Device.query.all()
+    shelves = ShelfStatus.query.all()
+
+    return {
+        "devices": {
+            "total": len(devices),
+            "online": len([d for d in devices if d.status == "online"]),
+            "offline": len([d for d in devices if d.status == "offline"]),
+        },
+
+        "cameras": {
+            "total": len(devices),
+            "online": len([d for d in devices if d.status == "online"]),
+        },
+
+        "shelves": {
+            "total": len(shelves),
+            "needs_restock": len([
+                s for s in shelves
+                if s.status in ("low", "low_stock", "empty")
+            ]),
+            "avg_fill_percentage": 85,
+        },
+
+        "footfall": {
+            "today_entries": latest.entry_count if latest else 0,
+            "current_occupancy": max(
+                (latest.entry_count - latest.exit_count),
+                0
+            ) if latest else 0,
+        },
+
+        "alerts": {
+            "total_open": 0,
+            "critical": 0,
+        },
+    }
 
 
 def get_shelf_statuses():

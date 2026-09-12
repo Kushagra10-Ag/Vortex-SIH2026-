@@ -443,6 +443,7 @@ export default function Dashboard() {
     } catch (e) {
       console.log('[v0] dashboard load error', e);
     }
+    
   };
 
   useEffect(() => {

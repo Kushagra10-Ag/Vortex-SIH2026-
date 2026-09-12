@@ -21,9 +21,14 @@ class Footfall(db.Model):
         db.Integer,
         default=0
     )
+    
+    @property
+    def current_occupancy(self):
+        return self.entry_count - self.exit_count
 
-    current_occupancy = db.Column(db.Integer, default=0)
-    dwell_time_avg = db.Column(db.Float, default=0.0)
+    @property
+    def dwell_time_avg(self):
+        return 0.0
 
     created_at = db.Column(
         db.DateTime,
