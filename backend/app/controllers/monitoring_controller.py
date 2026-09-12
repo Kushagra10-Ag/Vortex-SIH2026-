@@ -1,11 +1,15 @@
 from app.services import monitoring_service
+from app.utils.validators import validate_camera_event, validate_footfall
 
 def get_realtime_status():
     return monitoring_service.get_realtime_status()
 
 
 def log_camera_event(data):
-    return monitoring_service.record_camera_event(data)
+    valid, error = validate_camera_event(data)
+    if not valid:
+        return {"success": False, "error": error}, 400
+    return monitoring_service.record_camera_event(data), 201
 
 
 def get_camera_events(limit=50, event_type=None):
@@ -17,11 +21,14 @@ def get_shelf_statuses():
 
 
 def update_shelf(shelf_id, data):
-    return monitoring_service.update_shelf_status(shelf_id, data)
+    return monitoring_service.update_shelf_status(shelf_id, data), 200
 
 
 def log_footfall(data):
-    return monitoring_service.record_footfall(data)
+    valid, error = validate_footfall(data)
+    if not valid:
+        return {"success": False, "error": error}, 400
+    return monitoring_service.record_footfall(data), 201
 
 
 def get_footfall_stats(timeframe="today"):

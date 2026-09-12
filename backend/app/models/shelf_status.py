@@ -49,3 +49,15 @@ class ShelfStatus(db.Model):
         "Device",
         back_populates="shelf_statuses"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "product_id": self.product_id,
+            "product_name": self.product.name if self.product else None,
+            "device_id": self.device.device_id if self.device else self.device_id,
+            "estimated_quantity": self.estimated_quantity,
+            "confidence": self.confidence,
+            "status": self.status,
+            "last_checked": self.last_checked.isoformat() if self.last_checked else None,
+        }

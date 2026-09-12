@@ -74,13 +74,16 @@ def get_unread_alerts():
 # GET ACTIVE ALERTS
 # ==========================================================
 
-def get_active_alerts():
+def get_active_alerts(severity=None, limit=50):
 
-    alerts = Alert.query.filter_by(
+    query = Alert.query.filter_by(
         is_resolved=False
     ).order_by(
         desc(Alert.created_at)
-    ).all()
+    )
+    if severity:
+        query = query.filter_by(severity=severity)
+    alerts = query.limit(limit).all()
 
     return [
         alert.to_dict()
@@ -124,7 +127,7 @@ def mark_as_read(alert_id):
 # RESOLVE ALERT
 # ==========================================================
 
-def resolve_alert(alert_id):
+def resolve_alert(alert_id, data=None):
 
     alert = Alert.query.get(alert_id)
 
@@ -225,3 +228,8 @@ def get_alerts_by_category(category):
         alert.to_dict()
         for alert in alerts
     ]
+
+
+def get_alert_history(limit=100):
+    alerts = Alert.query.order_by(desc(Alert.created_at)).limit(limit).all()
+    return [alert.to_dict() for alert in alerts]

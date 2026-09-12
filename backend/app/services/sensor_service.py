@@ -20,10 +20,14 @@ def save_sensor_reading(data):
 
     reading = SensorReading(
         device_id=device.id,
+        sensor_id=data["sensor_id"],
         sensor_type=data["sensor_type"],
         value=data["value"],
         unit=data.get("unit"),
         is_mock=data.get("is_mock", False),
+        is_anomaly=data.get("is_anomaly", False),
+        threshold_min=data.get("threshold_min"),
+        threshold_max=data.get("threshold_max"),
         created_at=datetime.utcnow()
     )
 
@@ -37,11 +41,14 @@ def save_sensor_reading(data):
 # GET LATEST READINGS
 # ==========================================================
 
-def get_latest_readings(limit=20):
+def get_latest_readings(sensor_type=None, limit=20):
 
-    readings = SensorReading.query.order_by(
+    query = SensorReading.query.order_by(
         desc(SensorReading.created_at)
-    ).limit(limit).all()
+    )
+    if sensor_type:
+        query = query.filter_by(sensor_type=sensor_type)
+    readings = query.limit(limit).all()
 
     return [
         reading.to_dict()
@@ -159,3 +166,22 @@ def delete_old_readings(days=30):
     return {
         "message": "Old sensor readings deleted."
     }
+
+
+def record_reading(data):
+    return save_sensor_reading(data)
+
+
+def get_readings_history(sensor_id, hours=24):
+    from datetime import timedelta
+
+    device = Device.query.filter_by(device_id=sensor_id).first()
+    if not device:
+        raise ValueError("Device not found.")
+
+    threshold = datetime.utcnow() - timedelta(hours=hours)
+    readings = SensorReading.query.filter(
+        SensorReading.device_id == device.id,
+        SensorReading.created_at >= threshold,
+    ).order_by(desc(SensorReading.created_at)).all()
+    return [reading.to_dict() for reading in readings]

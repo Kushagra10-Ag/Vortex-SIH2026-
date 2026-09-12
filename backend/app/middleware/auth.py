@@ -1,7 +1,13 @@
 from functools import wraps
+import hmac
+import threading
+import time
 from flask import request, jsonify, current_app
 from app.models import User
 import jwt
+
+_device_rate_lock = threading.Lock()
+_device_rate_windows = {}
 
 def token_required(f):
     """
@@ -18,7 +24,9 @@ def token_required(f):
             return jsonify({"success": False, "error": "Invalid token header format. Use: Bearer <token>"}), 401
 
         token = parts[1]
-        secret_key = current_app.config.get("JWT_SECRET_KEY") or current_app.config.get("SECRET_KEY", "super-secret-key")
+        secret_key = current_app.config.get("JWT_SECRET_KEY") or current_app.config.get("SECRET_KEY")
+        if not secret_key:
+            return jsonify({"success": False, "error": "JWT secret is not configured"}), 503
 
         try:
             payload = jwt.decode(token, secret_key, algorithms=["HS256"])
@@ -40,4 +48,28 @@ def token_required(f):
 
 def get_current_user():
     return getattr(request, "current_user", None)
+
+
+def device_api_key_required(f):
+    """Require the configured API key for edge-device write endpoints."""
+    @wraps(f)
+    def decorated(*args, **kwargs):
+        configured_key = current_app.config.get("DEVICE_API_KEY")
+        provided_key = request.headers.get("X-API-Key", "")
+        if not configured_key:
+            return jsonify({"success": False, "error": "Device API key is not configured"}), 503
+        if not provided_key or not hmac.compare_digest(provided_key, configured_key):
+            return jsonify({"success": False, "error": "Invalid device API key"}), 401
+
+        now = time.monotonic()
+        rate_key = (request.remote_addr or "unknown", request.endpoint)
+        with _device_rate_lock:
+            window = [timestamp for timestamp in _device_rate_windows.get(rate_key, []) if now - timestamp < 60]
+            if len(window) >= current_app.config.get("DEVICE_RATE_LIMIT_PER_MINUTE", 120):
+                _device_rate_windows[rate_key] = window
+                return jsonify({"success": False, "error": "Device request rate limit exceeded"}), 429
+            window.append(now)
+            _device_rate_windows[rate_key] = window
+        return f(*args, **kwargs)
+    return decorated
 

@@ -33,3 +33,38 @@ def validate_enum(val, allowed_values, field_name="field"):
         return False, f"Invalid {field_name}: '{val}'. Allowed values: {', '.join(str(v) for v in allowed_values)}"
     return True, None
 
+
+def validate_camera_event(data):
+    return validate_required_fields(data, ["device_id", "event_type"])
+
+
+def validate_sensor_reading(data):
+    return validate_required_fields(data, ["device_id", "sensor_id", "sensor_type", "value"])
+
+
+def validate_footfall(data):
+    valid, error = validate_required_fields(data, ["device_id"])
+    if not valid:
+        return valid, error
+    for field in ("entry_count", "exit_count", "current_occupancy"):
+        if field in data:
+            valid, error = validate_numeric_range(data[field], min_val=0, field_name=field)
+            if not valid:
+                return valid, error
+    return True, None
+
+
+def validate_device_registration(data):
+    return validate_required_fields(data, ["device_id", "name", "device_type"])
+
+
+def validate_alert(data):
+    valid, error = validate_required_fields(data, ["title", "message"])
+    if not valid:
+        return valid, error
+    return validate_enum(
+        data.get("severity", "warning"),
+        ["info", "warning", "critical"],
+        "severity",
+    )
+

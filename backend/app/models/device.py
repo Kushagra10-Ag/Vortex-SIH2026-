@@ -54,3 +54,15 @@ class Device(db.Model):
         "ShelfStatus",
         back_populates="device"
     )
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "device_id": self.device_id,
+            "name": self.name,
+            "device_type": self.device_type,
+            "location": self.location,
+            "status": self.status,
+            "last_heartbeat": self.last_heartbeat.isoformat() if self.last_heartbeat else None,
+            "created_at": self.created_at.isoformat() if self.created_at else None,
+        }

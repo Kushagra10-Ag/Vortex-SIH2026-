@@ -71,6 +71,10 @@ def save_shelf_status(data):
     if not device:
         raise ValueError("Device not found.")
 
+    status = data.get("status", "normal")
+    if status == "low":
+        status = "low_stock"
+
     shelf = ShelfStatus.query.filter_by(
         product_id=product.id
     ).first()
@@ -80,7 +84,7 @@ def save_shelf_status(data):
         shelf.device_id = device.id
         shelf.estimated_quantity = data["estimated_quantity"]
         shelf.confidence = data.get("confidence", 1.0)
-        shelf.status = data.get("status", "normal")
+        shelf.status = status
         shelf.last_checked = datetime.utcnow()
 
     else:
@@ -90,7 +94,7 @@ def save_shelf_status(data):
             device_id=device.id,
             estimated_quantity=data["estimated_quantity"],
             confidence=data.get("confidence", 1.0),
-            status=data.get("status", "normal"),
+            status=status,
             last_checked=datetime.utcnow()
         )
 
@@ -117,7 +121,7 @@ def get_low_stock_shelves():
 
     shelves = ShelfStatus.query.filter(
         ShelfStatus.status.in_(
-            ["low", "empty"]
+            ["low", "low_stock", "empty"]
         )
     ).all()
 
@@ -144,6 +148,8 @@ def save_footfall(data):
         device_id=device.id,
         entry_count=data.get("entry_count", 0),
         exit_count=data.get("exit_count", 0),
+        current_occupancy=data.get("current_occupancy", 0),
+        dwell_time_avg=data.get("dwell_time_avg", 0.0),
         created_at=datetime.utcnow()
     )
 
@@ -232,7 +238,7 @@ def get_live_monitoring():
 
         "low_stock_shelves": len([
             s for s in shelves
-            if s.status == "low"
+            if s.status in ("low", "low_stock")
         ]),
 
         "empty_shelves": len([
@@ -248,8 +254,8 @@ def get_live_monitoring():
 
 def get_queue_status():
 
-    event = CameraEvent.query.filter_by(
-        event_type="queue_detected"
+    event = CameraEvent.query.filter(
+        CameraEvent.event_type.in_(["queue_detected", "queue_overflow"])
     ).order_by(
         desc(CameraEvent.created_at)
     ).first()
@@ -284,7 +290,7 @@ def get_people_count():
     return {
         "people":
         event.details.get(
-            "count",
+            "person_count",
             0
         )
     }
@@ -303,13 +309,64 @@ def get_shelf_summary():
             if s.status == "normal"
         ]),
 
-        "low": len([
+        "low_stock": len([
             s for s in shelves
-            if s.status == "low"
+            if s.status in ("low", "low_stock")
         ]),
 
         "empty": len([
             s for s in shelves
             if s.status == "empty"
         ])
+    }
+
+
+def record_camera_event(data):
+    """Record a camera event using either edge or backend field names."""
+    payload = dict(data)
+    if "device_id" not in payload and "camera_id" in payload:
+        payload["device_id"] = payload["camera_id"]
+    if "details" not in payload and "metadata" in payload:
+        payload["details"] = payload["metadata"]
+    return save_camera_event(payload)
+
+
+def get_camera_events(limit=50, event_type=None):
+    query = CameraEvent.query.order_by(desc(CameraEvent.created_at))
+    if event_type:
+        query = query.filter_by(event_type=event_type)
+    return [event.to_dict() for event in query.limit(limit).all()]
+
+
+def get_realtime_status():
+    return get_live_monitoring()
+
+
+def get_shelf_statuses():
+    return get_all_shelves()
+
+
+def update_shelf_status(shelf_id, data):
+    shelf = ShelfStatus.query.get(shelf_id)
+    if not shelf:
+        raise ValueError("Shelf not found.")
+
+    for field in ("estimated_quantity", "confidence", "status"):
+        if field in data:
+            setattr(shelf, field, data[field])
+    shelf.last_checked = datetime.utcnow()
+    db.session.commit()
+    return shelf.to_dict()
+
+
+def record_footfall(data):
+    return save_footfall(data)
+
+
+def get_footfall_analytics(timeframe="today"):
+    records = get_recent_footfall(limit=24 if timeframe == "today" else 100)
+    return {
+        "timeframe": timeframe,
+        "records": records,
+        "totals": get_total_footfall(),
     }
