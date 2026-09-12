@@ -138,6 +138,7 @@ class SensorSender:
         """Build a SensorEvent from a SensorReading and post it."""
         try:
             event = self._builder.sensor_reading(
+                sensor_id=reading.sensor_id,
                 sensor_type=reading.sensor_type,
                 value=reading.value,
                 unit=reading.unit,

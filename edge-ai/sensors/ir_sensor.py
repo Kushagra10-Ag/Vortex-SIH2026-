@@ -9,9 +9,11 @@ Logic:
   - When IR beam is broken (object detected within threshold distance): entry event
   - Direction detection (optional): second IR sensor for entry vs exit
   - Debounce: minimum 0.5s between events to filter noise
+  - Mock mode: Simulates 70% entry / 30% exit ratio for testing
 """
 
 import time
+import random
 from typing import Optional
 
 from ..utils.logger import log_info, log_warning, log_debug
@@ -109,6 +111,7 @@ class IRSensorReader:
         Returns:
             'entry' if entry detected, 'exit' if exit detected, None otherwise.
             (Simple single-sensor mode: every crossing is counted as 'entry')
+            (Mock mode: 70% entry / 30% exit ratio for testing)
         """
         now = time.time()
         beam_broken = self.read_beam_broken()
@@ -118,11 +121,28 @@ class IRSensorReader:
             if now - self._last_event_time >= self.debounce_seconds:
                 self._last_event_time = now
                 self._last_state = True
-                self._entry_count += 1
-                log_debug(
-                    f"[IRSensor] Person crossing detected (total entries: {self._entry_count})"
-                )
-                return "entry"
+
+                # In mock mode, simulate 70% entry / 30% exit ratio
+                if self.use_mock:
+                    event_type = "entry" if random.random() < 0.7 else "exit"
+                    if event_type == "entry":
+                        self._entry_count += 1
+                        log_debug(
+                            f"[IRSensor] Mock entry detected (total entries: {self._entry_count})"
+                        )
+                    else:
+                        self._exit_count += 1
+                        log_debug(
+                            f"[IRSensor] Mock exit detected (total exits: {self._exit_count})"
+                        )
+                    return event_type
+                else:
+                    # Hardware mode: single sensor = entry only
+                    self._entry_count += 1
+                    log_debug(
+                        f"[IRSensor] Person crossing detected (total entries: {self._entry_count})"
+                    )
+                    return "entry"
 
         elif not beam_broken and self._last_state:
             # Beam cleared

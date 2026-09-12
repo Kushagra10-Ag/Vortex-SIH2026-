@@ -9,6 +9,11 @@ Physics:
   - Send 10µs TRIG pulse → sensor emits 40kHz burst
   - Measure ECHO pulse width → distance = (pulse_width × speed_of_sound) / 2
   - Speed of sound ≈ 34300 cm/s at 20°C
+
+Usage:
+  - Shelf fill level estimation (top-down mount)
+  - Doorway proximity / footfall trigger
+  - Obstacle detection
 """
 
 import time
@@ -16,6 +21,7 @@ from typing import Optional
 
 from ..utils.logger import log_info, log_warning, log_debug, log_error
 from ..config import EdgeAIConfig
+from ..utils.constants import SensorType
 
 # Graceful import — only works on Raspberry Pi
 try:
@@ -56,14 +62,21 @@ class UltrasonicSensorReader:
         num_samples: int = 3,
         sample_delay: float = 0.05,
         use_mock: bool = not _GPIO_AVAILABLE,
+        shelf_mode: bool = False,
+        empty_distance_cm: float = 150.0,
+        full_distance_cm: float = 30.0,
     ):
         self.trig_pin = trig_pin
         self.echo_pin = echo_pin
         self.num_samples = num_samples
         self.sample_delay = sample_delay
         self.use_mock = use_mock or not _GPIO_AVAILABLE
+        self.shelf_mode = shelf_mode
+        self.empty_distance_cm = empty_distance_cm
+        self.full_distance_cm = full_distance_cm
 
         self._last_reading: Optional[float] = None
+        self._last_fill_percentage: Optional[float] = None
 
         if not self.use_mock:
             self._init_gpio()
@@ -137,6 +150,46 @@ class UltrasonicSensorReader:
     def last_reading(self) -> Optional[float]:
         """Return the most recent valid reading."""
         return self._last_reading
+
+    def calculate_fill_percentage(self, distance_cm: float) -> Optional[float]:
+        """
+        Calculate shelf fill percentage from distance measurement.
+
+        In shelf mode (top-down mount):
+        - Full shelf = sensor closer to surface (smaller distance)
+        - Empty shelf = sensor farther from surface (larger distance)
+
+        Args:
+            distance_cm: Current distance reading in cm
+
+        Returns:
+            Fill percentage (0-100), or None if invalid
+        """
+        if not self.shelf_mode:
+            return None
+
+        if distance_cm is None:
+            return None
+
+        # Clamp distance to valid range
+        clamped_distance = max(self.full_distance_cm, min(self.empty_distance_cm, distance_cm))
+
+        # Calculate fill percentage (inverse relationship)
+        # When distance = full_distance_cm → 100% full
+        # When distance = empty_distance_cm → 0% full
+        range_cm = self.empty_distance_cm - self.full_distance_cm
+        if range_cm <= 0:
+            return 0.0
+
+        fill_percent = ((self.empty_distance_cm - clamped_distance) / range_cm) * 100.0
+        self._last_fill_percentage = max(0.0, min(100.0, fill_percent))
+
+        return self._last_fill_percentage
+
+    @property
+    def last_fill_percentage(self) -> Optional[float]:
+        """Return the most recent fill percentage calculation (shelf mode only)."""
+        return self._last_fill_percentage
 
     def cleanup(self):
         """Release GPIO resources."""

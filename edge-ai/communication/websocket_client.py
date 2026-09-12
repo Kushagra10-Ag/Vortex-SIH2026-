@@ -2,14 +2,30 @@
 WebSocket Client — Optional Real-Time Event Channel
 Provides async bidirectional communication with BIZmate backend.
 
-Falls back gracefully to REST-only mode if:
-  - websockets package not installed
-  - Backend has no WS endpoint
-  - Connection fails
+WEBSOCKET DECISION: DISABLED BY DEFAULT, LIMITED RECONNECTION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Decision: WebSocket client is DISABLED by default and has LIMITED reconnection attempts.
+
+Rationale:
+  • Backend WebSocket endpoint (/ws/edge) is not yet implemented
+  • Infinite reconnection loops waste resources and can cause issues
+  • REST API is the primary and fully-functional communication channel
+  • WebSocket is optional supplementary feature for future enhancements
+
+Current behavior:
+  • WebSocket is not started in app.py (disabled by default)
+  • If enabled, limits reconnection attempts to prevent infinite loops
+  • Falls back to REST-only mode if websockets package not installed
+  • REST client handles all essential communication (events, sensors, heartbeats)
+
+When to enable WebSocket:
+  • After backend /ws/edge endpoint is implemented
+  • For real-time configuration updates or remote commands
+  • For lower-latency event streaming (optional enhancement)
 
 Usage:
-    ws = WebSocketClient(url="ws://127.0.0.1:5000/ws")
-    asyncio.run(ws.connect())
+    ws = WebSocketClient(url="ws://127.0.0.1:5000/ws/edge")
+    ws.start()  # Non-blocking start with limited reconnection
 """
 
 import asyncio
@@ -58,6 +74,7 @@ class WebSocketClient:
         device_id: str = EdgeAIConfig.DEVICE_ID,
         on_message: Optional[Callable[[dict], None]] = None,
         reconnect_delay: int = 10,
+        max_reconnect_attempts: int = 3,  # Limited reconnection to prevent infinite loops
     ):
         # Build WS URL from backend URL if not provided
         if ws_url is None:
@@ -69,10 +86,12 @@ class WebSocketClient:
         self.device_id = device_id
         self.on_message = on_message
         self.reconnect_delay = reconnect_delay
+        self.max_reconnect_attempts = max_reconnect_attempts
 
         self._connection = None
         self._is_connected = False
         self._is_running = False
+        self._reconnect_count = 0
         self._event_loop: Optional[asyncio.AbstractEventLoop] = None
         self._thread: Optional[threading.Thread] = None
 
@@ -161,16 +180,28 @@ class WebSocketClient:
             self._event_loop.close()
 
     async def _connect_loop(self):
-        """Reconnecting WebSocket loop."""
+        """Reconnecting WebSocket loop with limited attempts."""
         while self._is_running:
             try:
                 await self._connect_and_listen()
+                # Reset reconnect count on successful connection
+                self._reconnect_count = 0
             except Exception as e:
+                self._reconnect_count += 1
                 log_warning(
                     f"[WebSocketClient] Connection error: {e} — "
-                    f"retrying in {self.reconnect_delay}s"
+                    f"attempt {self._reconnect_count}/{self.max_reconnect_attempts}"
                 )
                 self._is_connected = False
+
+                # Stop reconnecting if max attempts reached
+                if self._reconnect_count >= self.max_reconnect_attempts:
+                    log_error(
+                        f"[WebSocketClient] Max reconnection attempts ({self.max_reconnect_attempts}) reached. "
+                        "Stopping WebSocket client. Continuing with REST-only mode."
+                    )
+                    self._is_running = False
+                    break
 
             if self._is_running:
                 await asyncio.sleep(self.reconnect_delay)

@@ -84,7 +84,7 @@ class BackendClient:
         Maps to: POST /devices/register
 
         Returns:
-            True if registration succeeded or device already exists.
+            True if registration succeeded or device already exists (400 treated as success).
         """
         payload = {
             "device_id": self.device_id,
@@ -316,6 +316,11 @@ class BackendClient:
                 elif resp.status_code == 409:
                     # Conflict (device already registered) — treat as success
                     log_debug(f"[BackendClient] {endpoint} → 409 Conflict (OK)")
+                    return True, {}
+
+                elif resp.status_code == 400 and endpoint == "/devices/register":
+                    # Bad request on device registration — likely already exists
+                    log_debug(f"[BackendClient] {endpoint} → 400 Bad Request (device likely exists, treating as success)")
                     return True, {}
 
                 else:

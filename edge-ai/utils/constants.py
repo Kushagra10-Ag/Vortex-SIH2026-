@@ -56,10 +56,11 @@ class SensorType:
     HUMIDITY = "humidity"
     WEIGHT = "weight"
     IR_DISTANCE = "ir_distance"
+    ULTRASONIC_DISTANCE = "ultrasonic_distance"
     MOTION_PIR = "motion_pir"
     AMBIENT_LIGHT = "ambient_light"
 
-    ALL = [TEMPERATURE, HUMIDITY, WEIGHT, IR_DISTANCE, MOTION_PIR, AMBIENT_LIGHT]
+    ALL = [TEMPERATURE, HUMIDITY, WEIGHT, IR_DISTANCE, ULTRASONIC_DISTANCE, MOTION_PIR, AMBIENT_LIGHT]
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
