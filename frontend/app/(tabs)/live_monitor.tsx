@@ -21,7 +21,7 @@ const RED = '#EF4444';
 const SIDEBAR_WIDTH = 208;
 
 // ⚠️ Adjust this to match your actual Flask blueprint prefix / host.
-const API_BASE = 'http://localhost:5000/api/monitoring';
+//const API_BASE = 'http://localhost:5000/api/monitoring';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 function Icon({ name, color, size = 15 }: { name: string; color: string; size?: number }) {

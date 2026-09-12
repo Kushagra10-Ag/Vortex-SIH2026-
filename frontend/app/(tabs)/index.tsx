@@ -3,7 +3,9 @@ import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
   Dimensions, Animated, RefreshControl, LayoutChangeEvent,
 } from 'react-native';
-import { fetchBills, fetchProducts } from '../../services/api';
+import {
+  fetchFullDashboard,
+} from "../../services/api";
 import { router } from 'expo-router';
 import Svg, {
   Path, Circle, Rect, Defs, LinearGradient, Stop, Line, G,
@@ -40,7 +42,7 @@ function Icon({ name, color, size = 15 }: { name: string; color: string; size?: 
   const p = { stroke: color, strokeWidth: 2, fill: 'none', strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
   const paths: Record<string, React.ReactNode> = {
     money: (<><Circle cx={12} cy={12} r={9} {...p} /><Path d="M14.5 9a3 3 0 0 0-2.5-1.2c-1.5 0-2.7.8-2.7 1.9s1.2 1.9 2.7 1.9 2.7.8 2.7 1.9-1.2 1.9-2.7 1.9A3 3 0 0 1 9.5 15" {...p} /><Path d="M12 5.5v1.3M12 17.2v1.3" {...p} /></>),
-        video: (<><Rect x={3} y={7} width={13} height={10} rx={2} {...p} /><Path d="M16 10.5l5-3v9l-5-3" {...p} /></>),
+    video: (<><Rect x={3} y={7} width={13} height={10} rx={2} {...p} /><Path d="M16 10.5l5-3v9l-5-3" {...p} /></>),
     users: (<><Circle cx={9} cy={8} r={3} {...p} /><Path d="M3.5 20a5.5 5.5 0 0 1 11 0" {...p} /><Path d="M16 5.5a3 3 0 0 1 0 5.8M17.5 15.5a5.5 5.5 0 0 1 3 4.5" {...p} /></>),
     walk: (<><Circle cx={13} cy={4} r={2} {...p} /><Path d="M13 8l-2.5 4 3 2 1 6M10.5 12l-4 2M15.5 14l3-1" {...p} /></>),
     box: (<><Path d="M3 8l9-5 9 5v8l-9 5-9-5Z" {...p} /><Path d="M3 8l9 5 9-5M12 13v8" {...p} /></>),
@@ -307,15 +309,20 @@ export default function Dashboard() {
   const isXWide = width >= 1280;
 
   const [refreshing, setRefreshing] = useState(false);
-  const [bills, setBills] = useState<any[]>([]);
-  const [products, setProducts] = useState<any[]>([]);
+
+  // Single source of truth: the backend's fully pre-computed dashboard payload.
+  // Nothing below is derived in React anymore — it's all read directly from
+  // dashboard_service.get_full_dashboard() via GET /dashboard/full.
+  const [full, setFull] = useState<any>(null);
+
   const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const loadData = async () => {
     try {
-      const [b, p] = await Promise.all([fetchBills(), fetchProducts()]);
-      setBills(Array.isArray(b) ? b : []);
-      setProducts(Array.isArray(p) ? p : []);
+      const res = await fetchFullDashboard();
+      // Backend wraps payloads as { success, message, data }. Fall back to the
+      // raw object in case a caller ever returns the data unwrapped.
+      setFull(res?.data ?? res ?? null);
     } catch (e) {
       console.log('[v0] dashboard load error', e);
     }
@@ -332,70 +339,39 @@ export default function Dashboard() {
     setTimeout(() => setRefreshing(false), 600);
   };
 
-  // ── Derivations from real data ──────────────────────────────────────────────
-  const now = new Date();
-  const isToday = (d: Date) => d.toDateString() === now.toDateString();
+  // ── Straight reads from the backend payload (no local math) ─────────────────
+  const k = full?.kpis ?? {};
+  const charts = full?.charts ?? {};
 
-  const todayBills = bills.filter((b: any) => b.created_at && isToday(new Date(b.created_at)));
-  const todayRevenue = todayBills.reduce((s: number, b: any) => s + (b.total_amount || 0), 0);
-  const currentCustomers = new Set(todayBills.map((b: any) => b.customer_name || b.id)).size;
+  const salesSeries = charts.sales_trend ?? [];
+  const footfallSeries = charts.footfall_trend ?? [];
+  const queueSeries = charts.queue_trend ?? [];
+  const inv = charts.inventory_breakdown ?? { healthy: 0, low_stock: 0, critical: 0 };
+  const invHealthPct = k.inventory_health_pct ?? 0;
 
-  const openHour = 9, closeHour = 21;
-  const hours = Array.from({ length: closeHour - openHour + 1 }, (_, i) => openHour + i);
-  const hourlyCount = hours.map((hr) =>
-    todayBills.filter((b: any) => b.created_at && new Date(b.created_at).getHours() === hr).length
-  );
+  const alerts = full?.recent_alerts ?? [];
+  const recs = full?.recommendations ?? [];
+  const devices = full?.devices ?? [];
+  const devicesOnline = devices.filter((d: any) => d.status === 'online').length;
+  const activeAlerts = k.active_alerts ?? 0;
 
-  const footfallSeries = hours.map((hr, i) => ({
-    label: `${hr}`,
-    value: hourlyCount[i] * 3 + (hourlyCount[i] > 0 ? 2 : 0),
-  }));
-  const todayFootfall = footfallSeries.reduce((s: number, x: any) => s + x.value, 0);
+  // Backend sends color as a plain string ("red" | "amber" | "blue" | "green");
+  // map it to the theme constants used everywhere else in this file.
+  const colorMap: Record<string, string> = { red: RED, amber: AMBER, blue: BLUE, green: GREEN };
 
-  const queueSeries = hours.map((hr, i) => ({ label: `${hr}`, value: Math.round(hourlyCount[i] * 1.4) }));
-  const peakQueue = Math.max(...queueSeries.map((q: any) => q.value), 0);
-  const avgWait = Math.max(1, Math.round(peakQueue * 1.5));
-
-  const lowStock = products.filter((p: any) => p.quantity < (p.min_stock_level ?? 0) && p.quantity > 0);
-  const critical = products.filter((p: any) => p.quantity <= 0);
-  const healthy = products.filter((p: any) => p.quantity >= (p.min_stock_level ?? 0));
-  const invHealthPct = products.length ? Math.round((healthy.length / products.length) * 100) : 100;
   const inventorySlices = [
-    { value: healthy.length, color: GREEN, label: 'Healthy' },
-    { value: lowStock.length, color: AMBER, label: 'Low Stock' },
-    { value: critical.length, color: RED, label: 'Critical' },
+    { value: inv.healthy, color: GREEN, label: 'Healthy' },
+    { value: inv.low_stock, color: AMBER, label: 'Low Stock' },
+    { value: inv.critical, color: RED, label: 'Critical' },
   ];
 
-  const alerts: { title: string; sub: string; color: string }[] = [];
-  if (peakQueue >= 4) alerts.push({ title: 'Queue Congestion', sub: `Peak ${peakQueue} in queue - busy hour`, color: RED });
-  lowStock.slice(0, 2).forEach((p: any) => alerts.push({ title: 'Shelf Low', sub: `${p.name} - ${p.quantity} left`, color: AMBER }));
-  critical.slice(0, 1).forEach((p: any) => alerts.push({ title: 'Out of Stock', sub: `${p.name} needs restock`, color: RED }));
-  alerts.push({ title: 'Camera Connected', sub: 'Front Entrance - live', color: GREEN });
-  alerts.push({ title: 'Inventory Updated', sub: `${products.length} items synced`, color: BLUE });
-
-  const recs: { icon: string; text: string }[] = [];
-  if (lowStock[0]) recs.push({ icon: 'refresh', text: `Restock ${lowStock[0].name}` });
-  if (peakQueue >= 3) recs.push({ icon: 'users', text: 'Open a second counter to cut queue' });
-  const busiestHour = hours[hourlyCount.indexOf(Math.max(...hourlyCount, 0))];
-  if (Math.max(...hourlyCount, 0) > 0) recs.push({ icon: 'clock', text: `Peak traffic around ${busiestHour}:00` });
-  if (recs.length < 4) recs.push({ icon: 'chart', text: 'Demand trending up vs. yesterday' });
-
-  const dayLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-  const weeklyTotals = new Array(7).fill(0);
-  bills.forEach((b: any) => {
-    if (!b.created_at) return;
-    const d = new Date(b.created_at);
-    weeklyTotals[(d.getDay() + 6) % 7] += b.total_amount || 0;
-  });
-  const salesSeries = dayLabels.map((label, i) => ({ label, value: weeklyTotals[i] }));
-
   const kpis = [
-    { label: "Today's Revenue", icon: 'money', value: `Rs ${todayRevenue.toFixed(0)}`, delta: '+15%', up: true, color: BLUE, spark: hourlyCount.map((c) => c * 100 + 20) },
-    { label: 'Current Customers', icon: 'users', value: `${currentCustomers}`, delta: '+8%', up: true, color: GREEN, spark: hourlyCount.map((c) => c + 1) },
-    { label: "Today's Footfall", icon: 'walk', value: `${todayFootfall}`, delta: '+12%', up: true, color: TEAL, spark: footfallSeries.map((f) => f.value + 1) },
-    { label: 'Inventory Health', icon: 'box', value: `${invHealthPct}%`, delta: `${healthy.length}/${products.length || 0}`, up: invHealthPct >= 70, color: GREEN, bar: invHealthPct },
-    { label: 'Queue Status', icon: 'clock', value: `${avgWait} min`, delta: peakQueue >= 4 ? '+10%' : 'stable', up: false, color: RED, spark: queueSeries.map((q) => q.value + 1) },
-    { label: 'Active Alerts', icon: 'bell', value: `${alerts.filter((a) => a.color === RED || a.color === AMBER).length}`, delta: 'new', up: false, color: AMBER, spark: hourlyCount.map((c) => c + 1) },
+    { label: "Today's Revenue", icon: 'money', value: `Rs ${Math.round(k.today_revenue ?? 0)}`, delta: '+15%', up: true, color: BLUE, spark: footfallSeries.map((f: any) => (f.value ?? 0) + 1) },
+    { label: 'Current Customers', icon: 'users', value: `${k.current_customers ?? 0}`, delta: '+8%', up: true, color: GREEN, spark: footfallSeries.map((f: any) => (f.value ?? 0) + 1) },
+    { label: "Today's Footfall", icon: 'walk', value: `${k.today_footfall ?? 0}`, delta: '+12%', up: true, color: TEAL, spark: footfallSeries.map((f: any) => (f.value ?? 0) + 1) },
+    { label: 'Inventory Health', icon: 'box', value: `${invHealthPct}%`, delta: `${inv.healthy}/${inv.healthy + inv.low_stock + inv.critical}`, up: invHealthPct >= 70, color: GREEN, bar: invHealthPct },
+    { label: 'Queue Status', icon: 'clock', value: `${k.avg_wait_minutes ?? 0} min`, delta: 'live', up: false, color: RED, spark: queueSeries.map((q: any) => (q.value ?? 0) + 1) },
+    { label: 'Active Alerts', icon: 'bell', value: `${activeAlerts}`, delta: 'new', up: false, color: AMBER, spark: queueSeries.map((q: any) => (q.value ?? 0) + 1) },
   ];
 
   // Layout widths tuned to match the reference "Retail Command Center" design:
@@ -418,7 +394,7 @@ export default function Dashboard() {
         <View style={styles.headerRight}>
           <View style={styles.bell}>
             <Icon name="bell" color={MUTED} size={18} />
-            <View style={styles.bellDot} />
+            {activeAlerts > 0 ? <View style={styles.bellDot} /> : null}
           </View>
           <View style={styles.avatar}>
             <Text style={styles.avatarText}>V</Text>
@@ -438,21 +414,21 @@ export default function Dashboard() {
           <Animated.View style={{ opacity: fadeAnim }}>
             {/* KPI cards */}
             <View style={styles.grid}>
-              {kpis.map((k, i) => (
+              {kpis.map((kp, i) => (
                 <View key={i} style={[styles.kpiCard, { flexBasis: kpiBasis }]}>
                   <View style={styles.kpiTop}>
-                    <View style={[styles.kpiIcon, { backgroundColor: k.color + '1A' }]}>
-                      <Icon name={k.icon} color={k.color} />
+                    <View style={[styles.kpiIcon, { backgroundColor: kp.color + '1A' }]}>
+                      <Icon name={kp.icon} color={kp.color} />
                     </View>
-                    <Text style={styles.kpiLabel}>{k.label}</Text>
+                    <Text style={styles.kpiLabel}>{kp.label}</Text>
                   </View>
-                  <Text style={styles.kpiValue}>{k.value}</Text>
+                  <Text style={styles.kpiValue}>{kp.value}</Text>
                   <View style={styles.kpiDeltaRow}>
-                    <Text style={[styles.kpiDelta, { color: k.up ? GREEN : RED }]}>
-                      {k.up ? '↑' : '↓'} {k.delta}
+                    <Text style={[styles.kpiDelta, { color: kp.up ? GREEN : RED }]}>
+                      {kp.up ? '↑' : '↓'} {kp.delta}
                     </Text>
                   </View>
-                  <KpiFooter k={k} />
+                  <KpiFooter k={kp} />
                 </View>
               ))}
             </View>
@@ -495,7 +471,7 @@ export default function Dashboard() {
             {/* Bottom row: AI recs / Alerts / Device status */}
             <View style={styles.grid}>
               <Panel title="AI Recommendation Panel" style={{ flexBasis: bottomBasis }}>
-                {recs.slice(0, 4).map((r, i) => (
+                {recs.slice(0, 4).map((r: any, i: number) => (
                   <View key={i} style={styles.recRow}>
                     <View style={styles.recIcon}><Icon name={r.icon} color={BLUE} /></View>
                     <Text style={styles.recText}>{r.text}</Text>
@@ -504,9 +480,9 @@ export default function Dashboard() {
               </Panel>
 
               <Panel title="Recent Alerts" style={{ flexBasis: bottomBasis }}>
-                {alerts.slice(0, 4).map((a, i) => (
+                {alerts.slice(0, 4).map((a: any, i: number) => (
                   <View key={i} style={styles.alertRow}>
-                    <View style={[styles.alertDot, { backgroundColor: a.color }]} />
+                    <View style={[styles.alertDot, { backgroundColor: colorMap[a.color] ?? BLUE }]} />
                     <View style={{ flex: 1 }}>
                       <Text style={styles.alertTitle}>{a.title}</Text>
                       <Text style={styles.alertSub}>{a.sub}</Text>
@@ -518,27 +494,22 @@ export default function Dashboard() {
                 </TouchableOpacity>
               </Panel>
 
-              <Panel title="Device Status" style={{ flexBasis: bottomBasis }}>
+              {/* Driven entirely by the `devices` array in the /dashboard/full payload */}
+              <Panel title="Device Status" sub={`${devicesOnline}/${devices.length} online`} style={{ flexBasis: bottomBasis }}>
                 <View style={styles.deviceGrid}>
-                  <View style={styles.deviceCard}>
-                    <Text style={styles.deviceName}>Mobile Camera</Text>
-                    <View style={styles.deviceStatusRow}>
-                      <View style={[styles.statusDot, { backgroundColor: GREEN }]} />
-                      <Text style={[styles.deviceStatus, { color: GREEN }]}>Online</Text>
+                  {devices.map((d: any, i: number) => (
+                    <View key={d.name ?? i} style={styles.deviceCard}>
+                      <Text style={styles.deviceName}>{d.name}</Text>
+                      {d.status === 'online' ? (
+                        <View style={styles.deviceStatusRow}>
+                          <View style={[styles.statusDot, { backgroundColor: GREEN }]} />
+                          <Text style={[styles.deviceStatus, { color: GREEN }]}>Online</Text>
+                        </View>
+                      ) : (
+                        <Text style={styles.deviceWaiting}>Waiting for Connection</Text>
+                      )}
                     </View>
-                  </View>
-                  <View style={styles.deviceCard}>
-                    <Text style={styles.deviceName}>IR Sensor</Text>
-                    <Text style={styles.deviceWaiting}>Waiting for Connection</Text>
-                  </View>
-                  <View style={styles.deviceCard}>
-                    <Text style={styles.deviceName}>Ultrasonic</Text>
-                    <Text style={styles.deviceWaiting}>Waiting for Connection</Text>
-                  </View>
-                  <View style={styles.deviceCard}>
-                    <Text style={styles.deviceName}>Scanners</Text>
-                    <Text style={styles.deviceWaiting}>Waiting for Connection</Text>
-                  </View>
+                  ))}
                 </View>
               </Panel>
             </View>

@@ -156,3 +156,34 @@ export const openBillPdf = (bill_id: number | string) => {
   const url = `${BASE_URL}/billing/bill-pdf/${bill_id}`;
   Linking.openURL(url); // ✅ already correct
 };
+export const fetchDashboardOverview = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/dashboard/overview`);
+    const data = await res.json();
+    return data || {};
+  } catch (error) {
+    console.log("Dashboard error:", error);
+    return {};
+  }
+};
+
+export const fetchRealtimeTelemetry = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/dashboard/realtime`);
+    const data = await res.json();
+    return data || {};
+  } catch (error) {
+    console.log("Realtime error:", error);
+    return {};
+  }
+};
+export const fetchFullDashboard = async () => {
+  try {
+    const res = await fetch(`${BASE_URL}/dashboard/full`);
+    const data = await res.json();
+    return data || {};
+  } catch (error) {
+    console.log("Full dashboard error:", error);
+    return {};
+  }
+};

@@ -1,141 +1,214 @@
-from datetime import datetime
+from datetime import datetime, timedelta
+
 from app.db import db
 from app.models import Device
 
+
 def register_device(data):
-    device_id = data.get("device_id")
-    name = data.get("name")
-    device_type = data.get("device_type")
+    """
+    Register a new device.
+    """
 
-    if not device_id or not name or not device_type:
-        return {"error": "device_id, name, and device_type are required"}, 400
+    existing = Device.query.filter_by(
+        device_id=data["device_id"]
+    ).first()
 
-    existing = Device.query.filter_by(device_id=device_id).first()
     if existing:
-        return {"error": f"Device with ID '{device_id}' already registered"}, 400
+        raise ValueError("Device already registered.")
 
     device = Device(
-        device_id=device_id.strip(),
-        name=name.strip(),
-        device_type=device_type.strip(),
-        location=data.get("location", "Store Floor"),
-        ip_address=data.get("ip_address"),
-        mac_address=data.get("mac_address"),
-        status=data.get("status", "online"),
-        firmware_version=data.get("firmware_version", "1.0.0"),
-        config_meta=data.get("config_meta", {}),
+        device_id=data["device_id"],
+        name=data["name"],
+        device_type=data["device_type"],
+        location=data.get("location", "Store"),
+        status="online",
         last_heartbeat=datetime.utcnow()
     )
 
     db.session.add(device)
     db.session.commit()
 
-    return {
-        "message": "Device registered successfully",
-        "device": device.to_dict()
-    }, 201
+    return device.to_dict()
 
 
-def get_all_devices(status=None, device_type=None):
-    query = Device.query
-    if status:
-        query = query.filter_by(status=status)
-    if device_type:
-        query = query.filter_by(device_type=device_type)
+def get_all_devices():
 
-    devices = query.order_by(Device.created_at.desc()).all()
-    return [d.to_dict() for d in devices]
+    devices = Device.query.order_by(
+        Device.created_at.desc()
+    ).all()
+
+    return [
+        device.to_dict()
+        for device in devices
+    ]
 
 
-def get_device_by_id(device_id):
-    device = Device.query.get(device_id)
-    if not device:
-        # Try lookup by device_id string
-        device = Device.query.filter_by(device_id=str(device_id)).first()
+def get_device(device_id):
+
+    device = Device.query.filter_by(
+        device_id=device_id
+    ).first()
 
     if not device:
-        return {"error": "Device not found"}, 404
+        raise ValueError("Device not found.")
 
-    return {"device": device.to_dict()}, 200
+    return device.to_dict()
 
 
 def update_device(device_id, data):
-    device = Device.query.get(device_id)
-    if not device:
-        device = Device.query.filter_by(device_id=str(device_id)).first()
+
+    device = Device.query.filter_by(
+        device_id=device_id
+    ).first()
 
     if not device:
-        return {"error": "Device not found"}, 404
+        raise ValueError("Device not found.")
 
     if "name" in data:
         device.name = data["name"]
+
+    if "device_type" in data:
+        device.device_type = data["device_type"]
+
     if "location" in data:
         device.location = data["location"]
+
     if "status" in data:
         device.status = data["status"]
-    if "ip_address" in data:
-        device.ip_address = data["ip_address"]
-    if "mac_address" in data:
-        device.mac_address = data["mac_address"]
-    if "firmware_version" in data:
-        device.firmware_version = data["firmware_version"]
-    if "config_meta" in data:
-        device.config_meta = data["config_meta"]
 
     db.session.commit()
-    return {"message": "Device updated successfully", "device": device.to_dict()}, 200
+
+    return device.to_dict()
 
 
 def delete_device(device_id):
-    device = Device.query.get(device_id)
-    if not device:
-        device = Device.query.filter_by(device_id=str(device_id)).first()
+
+    device = Device.query.filter_by(
+        device_id=device_id
+    ).first()
 
     if not device:
-        return {"error": "Device not found"}, 404
+        raise ValueError("Device not found.")
 
     db.session.delete(device)
     db.session.commit()
-    return {"message": "Device deleted successfully"}, 200
+
+    return {
+        "message": "Device deleted successfully."
+    }
 
 
-def record_heartbeat(data):
-    device_id = data.get("device_id")
-    if not device_id:
-        return {"error": "device_id is required"}, 400
+def heartbeat(device_id):
 
-    device = Device.query.filter_by(device_id=str(device_id)).first()
-    now = datetime.utcnow()
+    """
+    Called by Edge AI every few seconds.
+    """
+
+    device = Device.query.filter_by(
+        device_id=device_id
+    ).first()
 
     if not device:
-        # Auto-register device on initial heartbeat if requested
-        if data.get("auto_register"):
-            device = Device(
-                device_id=device_id,
-                name=data.get("name", f"Device {device_id}"),
-                device_type=data.get("device_type", "gateway"),
-                location=data.get("location", "Store Floor"),
-                ip_address=data.get("ip_address"),
-                status="online",
-                last_heartbeat=now
-            )
-            db.session.add(device)
-            db.session.commit()
-            return {"message": "Device registered and heartbeat recorded", "device": device.to_dict()}, 201
-        return {"error": "Device not found"}, 404
+        raise ValueError("Device not found.")
 
-    device.last_heartbeat = now
-    device.status = data.get("status", "online")
-    if "ip_address" in data:
-        device.ip_address = data["ip_address"]
-    if "firmware_version" in data:
-        device.firmware_version = data["firmware_version"]
+    device.status = "online"
+    device.last_heartbeat = datetime.utcnow()
 
     db.session.commit()
-    return {
-        "message": "Heartbeat acknowledged",
-        "device_id": device.device_id,
-        "status": device.status,
-        "last_heartbeat": now.isoformat()
-    }, 200
 
+    return device.to_dict()
+
+
+def update_offline_devices(timeout_minutes=5):
+
+    """
+    Mark devices offline if heartbeat is too old.
+    """
+
+    threshold = datetime.utcnow() - timedelta(
+        minutes=timeout_minutes
+    )
+
+    devices = Device.query.all()
+
+    updated = 0
+
+    for device in devices:
+
+        if (
+            device.last_heartbeat and
+            device.last_heartbeat < threshold and
+            device.status != "offline"
+        ):
+
+            device.status = "offline"
+            updated += 1
+
+    db.session.commit()
+
+    return {
+        "offline_updated": updated
+    }
+
+
+def get_devices_by_status(status):
+
+    devices = Device.query.filter_by(
+        status=status
+    ).all()
+
+    return [
+        device.to_dict()
+        for device in devices
+    ]
+
+
+def get_devices_by_type(device_type):
+
+    devices = Device.query.filter_by(
+        device_type=device_type
+    ).all()
+
+    return [
+        device.to_dict()
+        for device in devices
+    ]
+
+
+def get_device_summary():
+
+    total = Device.query.count()
+
+    online = Device.query.filter_by(
+        status="online"
+    ).count()
+
+    offline = Device.query.filter_by(
+        status="offline"
+    ).count()
+
+    warning = Device.query.filter_by(
+        status="warning"
+    ).count()
+
+    cameras = Device.query.filter_by(
+        device_type="camera"
+    ).count()
+
+    ir = Device.query.filter_by(
+        device_type="ir_sensor"
+    ).count()
+
+    ultrasonic = Device.query.filter_by(
+        device_type="ultrasonic_sensor"
+    ).count()
+
+    return {
+        "total_devices": total,
+        "online_devices": online,
+        "offline_devices": offline,
+        "warning_devices": warning,
+        "camera_count": cameras,
+        "ir_sensor_count": ir,
+        "ultrasonic_sensor_count": ultrasonic
+    }
