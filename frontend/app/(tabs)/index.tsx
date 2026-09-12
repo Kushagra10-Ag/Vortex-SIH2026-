@@ -397,7 +397,7 @@ export default function Dashboard() {
           <View style={styles.logoBadge}>
             <Text style={styles.logoBadgeText}>F</Text>
           </View>
-          <Text style={styles.title}>Retail Command Center</Text>
+          <Text style={styles.title}>BizMate</Text>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.bell}>

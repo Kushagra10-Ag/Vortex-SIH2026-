@@ -257,7 +257,7 @@ export default function Billing() {
       <View style={styles.topBar}>
         <View style={styles.topBarLeft}>
           <View style={styles.logoBadge}><Text style={styles.logoBadgeText}>F</Text></View>
-          <Text style={styles.title}>Billing & POS</Text>
+          <Text style={styles.title}>BizMate</Text>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.bell}>
