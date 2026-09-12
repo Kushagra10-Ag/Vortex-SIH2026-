@@ -17,8 +17,8 @@ import os
 import shutil
 from typing import Optional
 
-from ..utils.logger import log_info, log_warning, log_error
-from ..config import EdgeAIConfig
+from utils.logger import log_info, log_warning, log_error
+from config import EdgeAIConfig
 
 
 _EDGE_AI_ROOT = os.path.dirname(os.path.dirname(__file__))

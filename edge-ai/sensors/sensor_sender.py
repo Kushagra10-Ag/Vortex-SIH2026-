@@ -12,10 +12,10 @@ import time
 from typing import Optional
 
 from .sensor_manager import SensorManager
-from ..events.event_builder import EventBuilder
-from ..events.event_types import FootfallEvent
-from ..utils.logger import log_info, log_warning, log_debug, log_error
-from ..config import EdgeAIConfig
+from events.event_builder import EventBuilder
+from events.event_types import FootfallEvent
+from utils.logger import log_info, log_warning, log_debug, log_error
+from config import EdgeAIConfig
 
 
 class SensorSender:

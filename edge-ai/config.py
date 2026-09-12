@@ -4,12 +4,37 @@ Loads configuration from environment variables or defaults
 Centralized settings for backend communication, devices, models, and sensors
 """
 
+import json
 import os
 from dotenv import load_dotenv
 
 # Load .env file from edge-ai directory
 env_path = os.path.join(os.path.dirname(__file__), '.env')
 load_dotenv(env_path)
+
+
+def _parse_roi(value, default):
+    if not value:
+        return default
+    try:
+        roi = [int(part.strip()) for part in value.split(",")]
+        return roi if len(roi) == 4 else default
+    except ValueError:
+        return default
+
+
+def _parse_shelf_rois(value):
+    if not value:
+        return {}
+    try:
+        parsed = json.loads(value)
+        return {
+            shelf_id: [int(part) for part in roi]
+            for shelf_id, roi in parsed.items()
+            if isinstance(roi, list) and len(roi) == 4
+        }
+    except (TypeError, ValueError, json.JSONDecodeError):
+        return {}
 
 
 class EdgeAIConfig:
@@ -196,6 +221,12 @@ class EdgeAIConfig:
     
     DWELL_TIME_WARNING_SECONDS = int(os.getenv('DWELL_TIME_WARNING_SECONDS', '30'))
     """Alert if person stays in frame for this long (dwell time)"""
+
+    QUEUE_ROI = _parse_roi(os.getenv('QUEUE_ROI'), [100, 300, 400, 200])
+    """Billing queue ROI as x,y,width,height."""
+
+    SHELF_ROIS = _parse_shelf_rois(os.getenv('SHELF_ROIS'))
+    """Optional JSON object mapping shelf IDs to x,y,width,height ROIs."""
     
     # ════════════════════════════════════════════════════════════════════════════
     # OPTIONAL: GOOGLE GEMINI API (for LLM-based alerts)
@@ -258,6 +289,13 @@ class EdgeAIConfig:
         
         if cls.MODEL_CONFIDENCE_THRESHOLD < 0 or cls.MODEL_CONFIDENCE_THRESHOLD > 1:
             errors.append(f"MODEL_CONFIDENCE_THRESHOLD must be 0-1, got {cls.MODEL_CONFIDENCE_THRESHOLD}")
+
+        if len(cls.QUEUE_ROI) != 4 or cls.QUEUE_ROI[2] <= 0 or cls.QUEUE_ROI[3] <= 0:
+            errors.append("QUEUE_ROI must be x,y,width,height with positive dimensions")
+
+        for shelf_id, roi in cls.SHELF_ROIS.items():
+            if len(roi) != 4 or roi[2] <= 0 or roi[3] <= 0:
+                errors.append(f"SHELF_ROIS[{shelf_id}] must have positive dimensions")
         
         return (len(errors) == 0, errors)
 

@@ -16,8 +16,8 @@ import time
 import random
 from typing import Optional
 
-from ..utils.logger import log_info, log_warning, log_debug
-from ..config import EdgeAIConfig
+from utils.logger import log_info, log_warning, log_debug
+from config import EdgeAIConfig
 
 # Graceful import — RPi.GPIO only available on Raspberry Pi
 try:

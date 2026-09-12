@@ -20,7 +20,7 @@ import random
 import time
 from typing import Dict, Optional
 
-from ..utils.logger import log_debug
+from utils.logger import log_debug
 
 
 class MockSensorReader:

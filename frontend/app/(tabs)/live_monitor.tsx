@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   View, Text, ScrollView, StyleSheet, TouchableOpacity,
-  Dimensions, RefreshControl,
+  Dimensions, RefreshControl, Image,
 } from 'react-native';
 import { router } from 'expo-router';
 import Svg, { Path, Circle, Rect } from 'react-native-svg';
@@ -20,8 +20,8 @@ const RED = '#EF4444';
 
 const SIDEBAR_WIDTH = 208;
 
-// ⚠️ Adjust this to match your actual Flask blueprint prefix / host.
-//const API_BASE = 'http://localhost:5000/api/monitoring';
+const API_BASE = 'http://127.0.0.1:5000/monitoring';
+const CAMERA_STREAM_URL = 'http://10.12.43.218:8080/videofeed';
 
 // ── Icons ──────────────────────────────────────────────────────────────────
 function Icon({ name, color, size = 15 }: { name: string; color: string; size?: number }) {
@@ -137,17 +137,19 @@ export default function LiveMonitoring() {
   const [refreshing, setRefreshing] = useState(false);
   const [status, setStatus] = useState<RealtimeStatus | null>(null);
   const [events, setEvents] = useState<CameraEvent[]>([]);
+  const [cameraLoaded, setCameraLoaded] = useState(false);
+  const [cameraError, setCameraError] = useState(false);
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   const loadData = useCallback(async () => {
     try {
       const [statusRes, eventsRes] = await Promise.all([
-        fetch(`${API_BASE}/status`),
+        fetch(`${API_BASE}/realtime`),
         fetch(`${API_BASE}/camera-events?limit=6`),
       ]);
       const statusJson = await statusRes.json();
       const eventsJson = await eventsRes.json();
-      setStatus(statusJson);
+      setStatus(statusJson.data ?? statusJson);
       setEvents(Array.isArray(eventsJson) ? eventsJson : eventsJson.events || []);
     } catch (e) {
       console.log('[v0] live monitoring load error', e);
@@ -223,10 +225,27 @@ export default function LiveMonitoring() {
             <View style={[styles.panel, { flexBasis: isWide ? '46%' : '100%' }]}>
               <Text style={styles.panelTitle}>Live Mobile Camera Stream</Text>
               <View style={styles.cameraBox}>
-                <Icon name="cameraBig" color={FAINT} size={64} />
-                <Text style={styles.cameraWaiting}>
-                  {status?.cameras.online ? 'Streaming…' : 'Waiting for Camera'}
-                </Text>
+                <Image
+                  source={{ uri: CAMERA_STREAM_URL }}
+                  style={styles.cameraImage}
+                  resizeMode="cover"
+                  onLoad={() => {
+                    setCameraLoaded(true);
+                    setCameraError(false);
+                  }}
+                  onError={() => {
+                    setCameraLoaded(false);
+                    setCameraError(true);
+                  }}
+                />
+                {!cameraLoaded && (
+                  <View style={styles.cameraOverlay}>
+                    <Icon name="cameraBig" color={FAINT} size={64} />
+                    <Text style={styles.cameraWaiting}>
+                      {cameraError ? 'Camera stream unavailable' : 'Connecting to camera…'}
+                    </Text>
+                  </View>
+                )}
               </View>
             </View>
 
@@ -315,7 +334,13 @@ const styles = StyleSheet.create({
 
   cameraBox: {
     height: 320, borderRadius: 12, backgroundColor: '#E4ECF5',
+    alignItems: 'center', justifyContent: 'center', overflow: 'hidden',
+  },
+  cameraImage: { width: '100%', height: '100%' },
+  cameraOverlay: {
+    ...StyleSheet.absoluteFillObject,
     alignItems: 'center', justifyContent: 'center', gap: 10,
+    backgroundColor: '#E4ECF5',
   },
   cameraWaiting: { fontSize: 13, color: FAINT, fontWeight: '600' },
 

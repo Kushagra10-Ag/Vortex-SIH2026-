@@ -10,15 +10,15 @@ from typing import Optional
 
 import numpy as np
 
-from ..config import EdgeAIConfig
-from ..utils.image_utils import (
+from config import EdgeAIConfig
+from utils.image_utils import (
     bgr_to_grayscale,
     bgr_to_rgb,
     get_frame_dimensions,
     normalize_frame,
     resize_frame,
 )
-from ..utils.logger import log_debug, log_warning
+from utils.logger import log_debug, log_warning
 
 
 class FrameProcessor:

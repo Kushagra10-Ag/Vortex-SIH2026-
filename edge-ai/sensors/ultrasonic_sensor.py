@@ -19,9 +19,9 @@ Usage:
 import time
 from typing import Optional
 
-from ..utils.logger import log_info, log_warning, log_debug, log_error
-from ..config import EdgeAIConfig
-from ..utils.constants import SensorType
+from utils.logger import log_info, log_warning, log_debug, log_error
+from config import EdgeAIConfig
+from utils.constants import SensorType
 
 # Graceful import — only works on Raspberry Pi
 try:

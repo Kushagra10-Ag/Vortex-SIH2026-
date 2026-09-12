@@ -14,24 +14,31 @@ import threading
 import time
 from typing import Optional, Union
 
-import cv2
+try:
+    import cv2
+except ImportError:
+    cv2 = None
 import numpy as np
 
 from .reconnect import ReconnectWatchdog
-from ..config import EdgeAIConfig
-from ..utils.logger import log_debug, log_error, log_info, log_warning
+from config import EdgeAIConfig
+from utils.logger import log_debug, log_error, log_info, log_warning
 
 
 CameraSource = Union[int, str]
 
 
-def _open_capture(source: CameraSource) -> Optional[cv2.VideoCapture]:
+def _open_capture(source: CameraSource) -> Optional[object]:
     """
     Create a cv2.VideoCapture for the given source.
 
     Uses CAP_DSHOW on Windows webcam indices (avoids long default MSMF hangs).
     Uses CAP_FFMPEG for RTSP/HTTP streams.
     """
+    if cv2 is None:
+        log_error("[StreamHandler] OpenCV is not installed; install edge-ai requirements")
+        return None
+
     try:
         if isinstance(source, int):
             if os.name == "nt":
@@ -56,7 +63,7 @@ def _open_capture(source: CameraSource) -> Optional[cv2.VideoCapture]:
 
 
 def _configure_capture(
-    cap: cv2.VideoCapture,
+    cap: object,
     source: CameraSource,
     width: int,
     height: int,

@@ -16,10 +16,10 @@ from typing import List, Optional
 import numpy as np
 
 from .model_loader import ModelLoader
-from ..events.event_types import Detection
-from ..utils.helpers import bounding_box_center
-from ..utils.logger import log_debug, log_warning, log_error
-from ..config import EdgeAIConfig
+from events.event_types import Detection
+from utils.helpers import bounding_box_center
+from utils.logger import log_debug, log_warning, log_error
+from config import EdgeAIConfig
 
 
 # COCO class ID for 'person'

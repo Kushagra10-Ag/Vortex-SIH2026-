@@ -104,27 +104,25 @@ class CameraEvent:
             MonitoringService.record_camera_event in backend/app/services/monitoring_service.py
 
         Field mapping:
-            - device_id → camera_id (required by backend)
-            - bounding_box → bbox_coordinates
+            - device_id → device_id
             - metadata → details
-            - frame_base64 → snapshot_url (or keep as frame_snapshot for base64)
+            - bounding_box and person_count → details
         """
+        details = dict(self.metadata)
+        if self.bounding_box is not None:
+            details["bounding_box"] = self.bounding_box
+        if self.person_count:
+            details["person_count"] = self.person_count
+        if self.frame_base64:
+            details["frame_snapshot"] = self.frame_base64
+
         payload = {
-            "camera_id": self.device_id,  # Backend expects camera_id
+            "device_id": self.device_id,
             "event_type": self.event_type,
             "confidence": round(self.confidence, 4),
-            "bbox_coordinates": self.bounding_box,  # Backend expects bbox_coordinates
-            "details": self.metadata,  # Backend expects details
-            "timestamp": self.timestamp,
-            "person_count": self.person_count,
+            "details": details,
         }
-
-        # Add snapshot if available (backend can handle both base64 and URL)
-        if self.frame_base64:
-            payload["snapshot_url"] = f"data:image/jpeg;base64,{self.frame_base64}"
-
-        # Remove None values — backend validates required fields server-side
-        return {k: v for k, v in payload.items() if v is not None}
+        return payload
 
 
 # ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

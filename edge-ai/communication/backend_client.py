@@ -15,9 +15,9 @@ import requests
 from requests.exceptions import RequestException, Timeout, ConnectionError
 
 
-from ..utils.logger import log_info, log_warning, log_error, log_debug
-from ..config import EdgeAIConfig
-from ..events.event_types import CameraEvent, SensorEvent, FootfallEvent, HeartbeatEvent
+from utils.logger import log_info, log_warning, log_error, log_debug
+from config import EdgeAIConfig
+from events.event_types import CameraEvent, SensorEvent, FootfallEvent, HeartbeatEvent
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -67,6 +67,7 @@ class BackendClient:
         # Offline buffer — stored when backend is unreachable
         self._offline_buffer: List[Dict] = []
         self._offline_lock = threading.Lock()
+        self._flush_lock = threading.Lock()
 
         # Connectivity tracking
         self._backend_reachable = False
@@ -215,38 +216,45 @@ class BackendClient:
         Returns:
             Number of events successfully flushed.
         """
-        with self._offline_lock:
-            if not self._offline_buffer:
-                return 0
-            buffer_snapshot = list(self._offline_buffer)
-            self._offline_buffer.clear()
+        if not self._flush_lock.acquire(blocking=False):
+            return 0
 
-        flushed = 0
-        re_buffer = []
-
-        for item in buffer_snapshot:
-            endpoint = item["endpoint"]
-            payload = item["payload"]
-            success, _ = self._post(endpoint, payload, _is_retry=True)
-            if success:
-                flushed += 1
-            else:
-                re_buffer.append(item)
-
-        # Put back failed ones
-        if re_buffer:
+        try:
             with self._offline_lock:
-                self._offline_buffer = re_buffer + self._offline_buffer
-                self._offline_buffer = self._offline_buffer[:_OFFLINE_BUFFER_MAX]
+                if not self._offline_buffer:
+                    return 0
+                buffer_snapshot = list(self._offline_buffer)
+                self._offline_buffer.clear()
 
-        if flushed > 0:
-            log_info(f"[BackendClient] Flushed {flushed} offline-buffered events")
+            flushed = 0
+            re_buffer = []
 
-        return flushed
+            for item in buffer_snapshot:
+                endpoint = item["endpoint"]
+                payload = item["payload"]
+                success, _ = self._post(endpoint, payload, _is_retry=True)
+                if success:
+                    flushed += 1
+                else:
+                    re_buffer.append(item)
+
+            # Put back failed ones before events buffered during the flush.
+            if re_buffer:
+                with self._offline_lock:
+                    self._offline_buffer = re_buffer + self._offline_buffer
+                    self._offline_buffer = self._offline_buffer[:_OFFLINE_BUFFER_MAX]
+
+            if flushed > 0:
+                log_info(f"[BackendClient] Flushed {flushed} offline-buffered events")
+
+            return flushed
+        finally:
+            self._flush_lock.release()
 
     def offline_buffer_size(self) -> int:
         """Return number of events currently in offline buffer."""
-        return len(self._offline_buffer)
+        with self._offline_lock:
+            return len(self._offline_buffer)
 
     # ─────────────────────────────────────────────────────────────────────────
     # HEALTH CHECK

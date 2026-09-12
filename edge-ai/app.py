@@ -49,12 +49,14 @@ class EdgeAIDaemon:
         self._config = EdgeAIConfig
         self._running = False
         self._shutdown_requested = False
+        self._shutdown_event = threading.Event()
 
         # Components (initialized in setup())
         self._camera: Optional[MobileCamera] = None
         self._model_loader: Optional[ModelLoader] = None
         self._inference_engine: Optional[InferenceEngine] = None
-        self._tracker: Optional[CentroidTracker] = None
+        self._people_tracker: Optional[CentroidTracker] = None
+        self._queue_tracker: Optional[CentroidTracker] = None
         self._people_detector: Optional[PeopleDetector] = None
         self._queue_detector: Optional[QueueDetector] = None
         self._shelf_detector: Optional[ShelfDetector] = None
@@ -153,6 +155,7 @@ class EdgeAIDaemon:
         log_info("[EdgeAIDaemon] Starting daemon...")
         self._running = True
         self._start_time = time.time()
+        self._shutdown_event.clear()
 
         # Setup signal handlers for graceful shutdown
         signal.signal(signal.SIGINT, self._signal_handler)
@@ -201,12 +204,16 @@ class EdgeAIDaemon:
         log_info("[EdgeAIDaemon] Initiating shutdown...")
         self._shutdown_requested = True
         self._running = False
+        self._shutdown_event.set()
 
         # Stop threads
         if self._event_sender:
             self._event_sender.stop()
         if self._sensor_sender:
             self._sensor_sender.stop()
+        if self._heartbeat_thread:
+            self._heartbeat_thread.join(timeout=5)
+            self._heartbeat_thread = None
 
         # Cleanup camera
         if self._camera:
@@ -273,7 +280,11 @@ class EdgeAIDaemon:
     def _init_detectors(self):
         """Initialize all AI detectors."""
         # Initialize tracker
-        self._tracker = CentroidTracker(
+        self._people_tracker = CentroidTracker(
+            max_disappeared=30,
+            max_distance=100
+        )
+        self._queue_tracker = CentroidTracker(
             max_disappeared=30,
             max_distance=100
         )
@@ -281,25 +292,24 @@ class EdgeAIDaemon:
         # Initialize people detector
         self._people_detector = PeopleDetector(
             inference_engine=self._inference_engine,
-            tracker=self._tracker,
+            tracker=self._people_tracker,
             event_builder=self._event_builder,
             person_event_interval_s=5.0,
             dwell_threshold_s=self._config.DWELL_TIME_WARNING_SECONDS
         )
 
         # Initialize queue detector (with default ROI - can be configured)
-        queue_roi = [100, 300, 400, 200]  # Default billing counter ROI
         self._queue_detector = QueueDetector(
             inference_engine=self._inference_engine,
-            tracker=self._tracker,
+            tracker=self._queue_tracker,
             event_builder=self._event_builder,
-            roi=queue_roi,
+            roi=self._config.QUEUE_ROI,
             queue_threshold=self._config.QUEUE_LENGTH_THRESHOLD,
             service_time_seconds=2.0
         )
 
         # Initialize shelf detector with default configurations
-        shelf_configs = create_default_shelf_configs()
+        shelf_configs = create_default_shelf_configs(self._config.SHELF_ROIS)
         self._shelf_detector = ShelfDetector(
             inference_engine=self._inference_engine,
             event_builder=self._event_builder,
@@ -326,26 +336,29 @@ class EdgeAIDaemon:
                     time.sleep(0.1)
                     continue
 
-                # 2. Run people detection
-                people_events, person_count = self._people_detector.process(frame)
+                # 2. Run YOLO once and share detections across all detectors.
+                detections = self._inference_engine.run(frame)
 
-                # 3. Run queue detection
-                queue_events, queue_count, wait_time = self._queue_detector.process(frame)
+                # 3. Run people detection
+                people_events, person_count = self._people_detector.process(frame, detections)
 
-                # 4. Run shelf detection
-                shelf_events, shelf_states = self._shelf_detector.process(frame)
+                # 4. Run queue detection
+                queue_events, queue_count, wait_time = self._queue_detector.process(frame, detections)
 
-                # 5. Enqueue all events
+                # 5. Run shelf detection
+                shelf_events, shelf_states = self._shelf_detector.process(frame, detections)
+
+                # 6. Enqueue all events
                 all_events = people_events + queue_events + shelf_events
                 for event in all_events:
                     self._event_sender.enqueue(event)
 
-                # 6. Check IR sensor for footfall
+                # 7. Check IR sensor for footfall
                 crossing = self._sensor_manager.read_ir_crossing()
                 if crossing:
                     log_debug(f"[EdgeAIDaemon] IR crossing: {crossing}")
 
-                # 7. Update statistics
+                # 8. Update statistics
                 self._frames_processed += 1
 
                 # Log status periodically
@@ -376,9 +389,7 @@ class EdgeAIDaemon:
 
         while self._running and not self._shutdown_requested:
             try:
-                time.sleep(self._config.HEARTBEAT_INTERVAL_SECONDS)
-
-                if not self._running:
+                if self._shutdown_event.wait(self._config.HEARTBEAT_INTERVAL_SECONDS):
                     break
 
                 # Build heartbeat event

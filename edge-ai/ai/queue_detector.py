@@ -15,10 +15,10 @@ import numpy as np
 
 from .inference import InferenceEngine, filter_persons
 from .tracker import CentroidTracker
-from ..events.event_builder import EventBuilder
-from ..events.event_types import CameraEvent
-from ..config import EdgeAIConfig
-from ..utils.logger import log_debug, log_info, log_warning
+from events.event_builder import EventBuilder
+from events.event_types import CameraEvent
+from config import EdgeAIConfig
+from utils.logger import log_debug, log_info, log_warning
 
 
 class QueueDetector:
@@ -75,7 +75,7 @@ class QueueDetector:
     # ─────────────────────────────────────────────────────────────────────────
 
     def process(
-        self, frame: np.ndarray
+        self, frame: np.ndarray, detections=None
     ) -> Tuple[List[CameraEvent], int, float]:
         """
         Process a single frame: detect people in ROI, track, and generate events.
@@ -91,8 +91,8 @@ class QueueDetector:
         """
         events: List[CameraEvent] = []
 
-        # 1. Run YOLO inference (with frame-skip)
-        all_detections = self._engine.run(frame)
+        # 1. Reuse shared frame inference when supplied by the daemon.
+        all_detections = detections if detections is not None else self._engine.run(frame)
 
         # 2. Filter to persons only
         persons = filter_persons(all_detections)
@@ -118,10 +118,20 @@ class QueueDetector:
             if now - self._last_overflow_time >= self._overflow_cooldown_seconds:
                 self._last_overflow_time = now
                 # Use combined ROI or largest person bbox as primary
-                primary_bbox = self._roi if self._roi else (
-                    max(tracked, key=lambda d: (d.bbox[2] * d.bbox[3]) if d.bbox else 0).bbox
-                    if tracked else None
-                )
+                if self._roi:
+                    primary_bbox = self._roi
+                else:
+                    valid_bboxes = [
+                        d.bbox
+                        for d in tracked
+                        if isinstance(getattr(d, "bbox", None), (list, tuple))
+                        and len(d.bbox) >= 4
+                    ]
+                    primary_bbox = max(
+                        valid_bboxes,
+                        key=lambda bbox: bbox[2] * bbox[3],
+                        default=None,
+                    )
                 events.append(
                     self._builder.queue_overflow(
                         count=queue_count,
@@ -240,7 +250,11 @@ class QueueDetector:
         """Calculate average confidence of tracked detections."""
         if not detections:
             return 0.0
-        confidences = [d.confidence for d in detections if d.confidence is not None]
+        confidences = [
+            d.confidence
+            for d in detections
+            if isinstance(getattr(d, "confidence", None), (int, float))
+        ]
         if not confidences:
             return 0.0
         return sum(confidences) / len(confidences)

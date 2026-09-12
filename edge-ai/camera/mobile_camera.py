@@ -17,8 +17,8 @@ from typing import Optional, Union
 
 from .frame_processor import FrameProcessor
 from .stream_handler import StreamHandler
-from ..config import EdgeAIConfig
-from ..utils.logger import log_info, log_warning
+from config import EdgeAIConfig
+from utils.logger import log_info, log_warning
 
 
 # Android IP Webcam default MJPEG path (app setting: http://<ip>:8080/video)
