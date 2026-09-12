@@ -52,6 +52,14 @@ function Icon({ name, color, size = 15 }: { name: string; color: string; size?: 
     chart: (<><Path d="M4 4v16h16" {...p} /><Path d="M8 15l3-4 3 2 4-6" {...p} /></>),
     grid: (<><Rect x={4} y={4} width={7} height={7} rx={1.5} {...p} /><Rect x={13} y={4} width={7} height={7} rx={1.5} {...p} /><Rect x={4} y={13} width={7} height={7} rx={1.5} {...p} /><Rect x={13} y={13} width={7} height={7} rx={1.5} {...p} /></>),
     cart: (<><Circle cx={9} cy={20} r={1.4} fill={color} /><Circle cx={17} cy={20} r={1.4} fill={color} /><Path d="M3 4h2l2.2 10.6a2 2 0 0 0 2 1.6h7.3a2 2 0 0 0 2-1.6L20 8H6" {...p} /></>),
+    bot: (
+  <>
+    <Rect x={4} y={7} width={16} height={12} rx={3} {...p} />
+    <Circle cx={9} cy={13} r={1.2} fill={color} />
+    <Circle cx={15} cy={13} r={1.2} fill={color} />
+    <Path d="M12 3v4M9 3h6" {...p} />
+  </>
+),
     briefcase: (<><Rect x={3} y={8} width={18} height={11} rx={2} {...p} /><Path d="M8 8V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2M3 13h18" {...p} /></>),
     gear: (<><Circle cx={12} cy={12} r={3} {...p} /><Path d="M12 3v2.2M12 18.8V21M21 12h-2.2M5.2 12H3M18.4 5.6l-1.5 1.5M7.1 16.9l-1.5 1.5M18.4 18.4l-1.5-1.5M7.1 7.1L5.6 5.6" {...p} /></>),
   };
@@ -278,10 +286,8 @@ function Sidebar() {
     { key: 'live-monitoring', label: 'Live Monitoring', icon: 'video', route: '/live_monitor' },
     { key: 'billing', label: 'Billing', icon: 'cart', route: '/billing' },
     { key: 'inventory', label: 'Inventory', icon: 'box', route: '/inventory' },
-    { key: 'customers', label: 'Customers', icon: 'users', route: '/customers' },
-    { key: 'employees', label: 'Employees', icon: 'briefcase', route: '/employees' },
     { key: 'analytics', label: 'Analytics', icon: 'chart', route: '/analytics' },
-    { key: 'settings', label: 'Settings', icon: 'gear', route: '/settings' },
+    { key: 'ai-assistant', label: 'AI Assistant', icon: 'bot', route: '/chatbot' },
   ];
   return (
     <View style={styles.sidebar}>
@@ -293,7 +299,9 @@ function Sidebar() {
             style={[styles.navItem, isActive && styles.navItemActive]}
             onPress={() => router.push(item.route as any)}
           >
-            <Icon name={item.icon} color={isActive ? BLUE : MUTED} size={16} />
+            <View style={styles.navIcon}>
+  <Icon name={item.icon} color={isActive ? BLUE : MUTED} size={16} />
+</View>
             <Text style={[styles.navLabel, isActive && styles.navLabelActive]}>{item.label}</Text>
           </TouchableOpacity>
         );
@@ -542,9 +550,19 @@ const styles = StyleSheet.create({
     paddingVertical: 14, paddingHorizontal: 10, gap: 3,
   },
   navItem: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    paddingVertical: 10, paddingHorizontal: 12, borderRadius: 10,
-  },
+  flexDirection: 'row',
+  alignItems: 'center',
+  gap: 10,
+  paddingVertical: 10,
+  paddingHorizontal: 12,
+  borderRadius: 10,
+},
+
+navIcon: {
+  width: 16,
+  height: 16,
+  flexShrink: 0,
+},
   navItemActive: { backgroundColor: BLUE + '14' },
   navLabel: { fontSize: 13, fontWeight: '600', color: MUTED },
   navLabelActive: { color: BLUE, fontWeight: '800' },
