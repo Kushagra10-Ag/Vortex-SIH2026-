@@ -195,7 +195,7 @@ export default function LiveMonitoring() {
           <View style={styles.logoBadge}>
             <Text style={styles.logoBadgeText}>F</Text>
           </View>
-          <Text style={styles.title}>Live Monitoring</Text>
+          <Text style={styles.title}>BizMate</Text>
         </View>
         <View style={styles.headerRight}>
           <View style={styles.bell}>
