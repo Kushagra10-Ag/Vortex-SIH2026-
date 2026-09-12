@@ -82,8 +82,14 @@ class EdgeAIConfig:
     # AI MODEL CONFIGURATION
     # ════════════════════════════════════════════════════════════════════════════
     
-    YOLO_MODEL_NAME = os.getenv('YOLO_MODEL_NAME', 'yolov5s')
-    """YOLO model to use: yolov5s, yolov5m, yolov5l, yolov8s, yolov8m"""
+    YOLO_MODEL_NAME = os.getenv('YOLO_MODEL_NAME', 'yolo11n.pt')
+    """
+    Ultralytics pretrained name used when local weights are missing or empty.
+    Default is YOLOv11 nano (edge-friendly). Alternatives: yolo11s.pt, yolov8n.pt.
+    """
+
+    YOLO_WEIGHTS_PATH = os.getenv('YOLO_WEIGHTS_PATH', 'weights/yolov11.pt')
+    """Local .pt path (relative to edge-ai/ or absolute). Cached after first download."""
     
     MODEL_CONFIDENCE_THRESHOLD = float(os.getenv('MODEL_CONFIDENCE_THRESHOLD', '0.5'))
     """Minimum confidence score for detections"""
@@ -214,6 +220,7 @@ class EdgeAIConfig:
             'camera_fps': cls.CAMERA_FPS,
             'camera_resolution': f"{cls.CAMERA_WIDTH}x{cls.CAMERA_HEIGHT}",
             'yolo_model': cls.YOLO_MODEL_NAME,
+            'yolo_weights_path': cls.YOLO_WEIGHTS_PATH,
             'inference_skip_frames': cls.INFERENCE_SKIP_FRAMES,
             'sensors': {
                 'use_mock': cls.USE_MOCK_SENSORS,

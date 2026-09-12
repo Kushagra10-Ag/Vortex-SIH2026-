@@ -217,6 +217,7 @@ class EventBuilder:
 
     def sensor_reading(
         self,
+        sensor_id: str,
         sensor_type: str,
         value: float,
         unit: str,
@@ -229,7 +230,8 @@ class EventBuilder:
         Build a generic sensor reading event.
 
         Args:
-            sensor_type:    Type string (e.g. 'temperature', 'humidity', 'weight')
+            sensor_id:      Unique sensor identifier (required by backend)
+            sensor_type:    Type string (e.g. 'temperature', 'humidity', 'weight', 'ultrasonic_distance')
             value:          Numeric reading value
             unit:           Unit of measurement (e.g. '°C', '%', 'kg')
             is_anomaly:     True if value exceeds thresholds
@@ -242,6 +244,7 @@ class EventBuilder:
         """
         return SensorEvent(
             device_id=self.device_id,
+            sensor_id=sensor_id,
             sensor_type=sensor_type,
             value=round(value, 4),
             unit=unit,
@@ -253,6 +256,7 @@ class EventBuilder:
 
     def temperature_reading(
         self,
+        sensor_id: str,
         celsius: float,
         is_anomaly: bool = False,
         threshold_min: float = 2.0,
@@ -260,6 +264,7 @@ class EventBuilder:
     ) -> SensorEvent:
         """Build temperature sensor reading event."""
         return self.sensor_reading(
+            sensor_id=sensor_id,
             sensor_type=SensorType.TEMPERATURE,
             value=celsius,
             unit="°C",
@@ -270,6 +275,7 @@ class EventBuilder:
 
     def humidity_reading(
         self,
+        sensor_id: str,
         percent: float,
         is_anomaly: bool = False,
         threshold_min: float = 30.0,
@@ -277,6 +283,7 @@ class EventBuilder:
     ) -> SensorEvent:
         """Build humidity sensor reading event."""
         return self.sensor_reading(
+            sensor_id=sensor_id,
             sensor_type=SensorType.HUMIDITY,
             value=percent,
             unit="%",
@@ -287,12 +294,14 @@ class EventBuilder:
 
     def weight_reading(
         self,
+        sensor_id: str,
         kg: float,
         shelf_id: Optional[str] = None,
         is_anomaly: bool = False,
     ) -> SensorEvent:
         """Build shelf weight (load cell) reading event."""
         return self.sensor_reading(
+            sensor_id=sensor_id,
             sensor_type=SensorType.WEIGHT,
             value=kg,
             unit="kg",
@@ -302,12 +311,14 @@ class EventBuilder:
 
     def distance_reading(
         self,
+        sensor_id: str,
         cm: float,
         sensor_type: str = SensorType.IR_DISTANCE,
         is_anomaly: bool = False,
     ) -> SensorEvent:
         """Build distance sensor (IR / ultrasonic) reading event."""
         return self.sensor_reading(
+            sensor_id=sensor_id,
             sensor_type=sensor_type,
             value=cm,
             unit="cm",

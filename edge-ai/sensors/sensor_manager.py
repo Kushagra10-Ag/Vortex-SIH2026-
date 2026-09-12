@@ -16,7 +16,7 @@ from dataclasses import dataclass, field
 from .mock_sensor import MockSensorReader
 from .ir_sensor import IRSensorReader
 from .ultrasonic_sensor import UltrasonicSensorReader
-from ..utils.constants import SensorType, SensorThresholds
+from ..utils.constants import SensorThresholds, SensorType
 from ..utils.logger import log_info, log_warning, log_debug, log_error
 from ..config import EdgeAIConfig
 
@@ -27,6 +27,7 @@ class SensorReading:
     A single processed sensor reading with threshold/anomaly metadata.
 
     Attributes:
+        sensor_id:      Unique sensor identifier (required by backend)
         sensor_type:    SensorType constant string
         value:          Numeric reading
         unit:           Unit of measurement
@@ -35,6 +36,7 @@ class SensorReading:
         threshold_max:  Upper bound (from SensorThresholds)
         metadata:       Extra context (gpio pin, location, etc.)
     """
+    sensor_id: str
     sensor_type: str
     value: float
     unit: str
@@ -81,6 +83,9 @@ class SensorManager:
                 trig_pin=EdgeAIConfig.ULTRASONIC_TRIG_PIN,
                 echo_pin=EdgeAIConfig.ULTRASONIC_ECHO_PIN,
                 use_mock=force_mock,
+                shelf_mode=True,  # Enable shelf fill calculation
+                empty_distance_cm=150.0,
+                full_distance_cm=30.0,
             )
 
         # DHT22 — try real hardware, fall back to mock
@@ -94,6 +99,16 @@ class SensorManager:
             self._hx711_reader = self._init_hx711()
 
         self._use_mock = force_mock
+
+        # Generate sensor IDs based on device ID
+        self._device_id = EdgeAIConfig.DEVICE_ID
+        self._sensor_ids = {
+            "temperature": f"{self._device_id}_temp",
+            "humidity": f"{self._device_id}_hum",
+            "weight": f"{self._device_id}_weight",
+            "ultrasonic": f"{self._device_id}_ultrasonic",
+        }
+
         log_info(
             f"[SensorManager] Initialized — "
             f"mock={force_mock}, "
@@ -197,6 +212,7 @@ class SensorManager:
             )
 
             return SensorReading(
+                sensor_id=self._sensor_ids["temperature"],
                 sensor_type=SensorType.TEMPERATURE,
                 value=round(temp, 2),
                 unit="°C",
@@ -227,6 +243,7 @@ class SensorManager:
             )
 
             return SensorReading(
+                sensor_id=self._sensor_ids["humidity"],
                 sensor_type=SensorType.HUMIDITY,
                 value=round(humidity, 2),
                 unit="%",
@@ -256,6 +273,7 @@ class SensorManager:
             )
 
             return SensorReading(
+                sensor_id=self._sensor_ids["weight"],
                 sensor_type=SensorType.WEIGHT,
                 value=round(weight_kg, 3),
                 unit="kg",
@@ -280,13 +298,22 @@ class SensorManager:
                 <= SensorThresholds.DISTANCE_MAX
             )
 
+            # Calculate fill percentage if in shelf mode
+            metadata = {}
+            if self._ultrasonic.shelf_mode:
+                fill_pct = self._ultrasonic.calculate_fill_percentage(dist)
+                if fill_pct is not None:
+                    metadata["fill_percentage"] = round(fill_pct, 2)
+
             return SensorReading(
-                sensor_type=SensorType.IR_DISTANCE,
+                sensor_id=self._sensor_ids["ultrasonic"],
+                sensor_type=SensorType.ULTRASONIC_DISTANCE,
                 value=dist,
                 unit="cm",
                 is_anomaly=is_anomaly,
                 threshold_min=SensorThresholds.DISTANCE_MIN,
                 threshold_max=SensorThresholds.DISTANCE_MAX,
+                metadata=metadata,
             )
         except Exception as e:
             log_error(f"[SensorManager] Ultrasonic read error: {e}")

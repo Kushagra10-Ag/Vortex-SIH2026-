@@ -101,8 +101,28 @@ class CameraEvent:
 
         Maps to:
             CameraEvent model fields in backend/app/models/camera_event.py
+            MonitoringService.record_camera_event in backend/app/services/monitoring_service.py
+
+        Field mapping:
+            - device_id → camera_id (required by backend)
+            - bounding_box → bbox_coordinates
+            - metadata → details
+            - frame_base64 → snapshot_url (or keep as frame_snapshot for base64)
         """
-        payload = self.to_dict()
+        payload = {
+            "camera_id": self.device_id,  # Backend expects camera_id
+            "event_type": self.event_type,
+            "confidence": round(self.confidence, 4),
+            "bbox_coordinates": self.bounding_box,  # Backend expects bbox_coordinates
+            "details": self.metadata,  # Backend expects details
+            "timestamp": self.timestamp,
+            "person_count": self.person_count,
+        }
+
+        # Add snapshot if available (backend can handle both base64 and URL)
+        if self.frame_base64:
+            payload["snapshot_url"] = f"data:image/jpeg;base64,{self.frame_base64}"
+
         # Remove None values — backend validates required fields server-side
         return {k: v for k, v in payload.items() if v is not None}
 
@@ -118,8 +138,9 @@ class SensorEvent:
 
     Attributes:
         device_id:      Backend device ID for the sensor hub / edge box
+        sensor_id:     Unique sensor identifier (required by backend)
         sensor_type:    Type string matching SensorType constants
-                        e.g. 'temperature', 'humidity', 'weight'
+                        e.g. 'temperature', 'humidity', 'weight', 'ultrasonic_distance'
         value:          Numeric sensor reading
         unit:           Unit string (e.g. '°C', '%', 'kg', 'cm')
         is_anomaly:     True if reading exceeds configured thresholds
@@ -129,6 +150,7 @@ class SensorEvent:
         metadata:       Extra context (gpio_pin, location, etc.)
     """
     device_id: str
+    sensor_id: str
     sensor_type: str
     value: float
     unit: str
@@ -141,6 +163,7 @@ class SensorEvent:
     def to_dict(self) -> Dict[str, Any]:
         return {
             "device_id": self.device_id,
+            "sensor_id": self.sensor_id,
             "sensor_type": self.sensor_type,
             "value": self.value,
             "unit": self.unit,
@@ -152,8 +175,40 @@ class SensorEvent:
         }
 
     def to_backend_payload(self) -> Dict[str, Any]:
-        """Format payload for /sensors/readings endpoint."""
-        payload = self.to_dict()
+        """
+        Format payload for /sensors/readings endpoint.
+
+        Maps to:
+            SensorService.record_reading in backend/app/services/sensor_service.py
+            SensorReading model in backend/app/models/sensor_reading.py
+
+        Field mapping:
+            - sensor_id → sensor_id (required by backend)
+            - device_id → device_id (for device lookup)
+            - metadata → location (if location key exists in metadata)
+        """
+        payload = {
+            "sensor_id": self.sensor_id,  # Required by backend
+            "sensor_type": self.sensor_type,
+            "value": self.value,
+            "unit": self.unit,
+            "device_id": self.device_id,  # For device lookup
+            "threshold_min": self.threshold_min,
+            "threshold_max": self.threshold_max,
+            "timestamp": self.timestamp,
+        }
+
+        # Extract location from metadata if present
+        if self.metadata and "location" in self.metadata:
+            payload["location"] = self.metadata["location"]
+
+        # Include remaining metadata as extra context
+        if self.metadata:
+            for key, value in self.metadata.items():
+                if key != "location":  # Don't duplicate location
+                    payload[f"metadata_{key}"] = value
+
+        # Remove None values — backend validates required fields server-side
         return {k: v for k, v in payload.items() if v is not None}
 
 
